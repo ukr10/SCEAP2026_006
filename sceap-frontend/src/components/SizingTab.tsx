@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
-import { Upload, FileText, Calculator, Edit, Trash2 } from 'lucide-react';
+import { Upload, FileText, Calculator, Edit, Trash2, Loader2 } from 'lucide-react';
 
 interface FeederData {
   id: number;
@@ -16,12 +16,93 @@ interface CableCatalogue {
   [key: string]: any;
 }
 
+// Professional Loading Component
+const LoadingOverlay = ({ message, progress }: { message: string; progress?: number }) => {
+  const loadingMessages = [
+    "Analyzing electrical parameters...",
+    "Processing feeder configurations...",
+    "Validating cable specifications...",
+    "Calculating load distributions...",
+    "Optimizing cable routing paths...",
+    "Ensuring electrical safety standards...",
+    "Finalizing engineering calculations..."
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="bg-slate-800 rounded-lg p-8 border border-slate-700 shadow-2xl max-w-md w-full mx-4">
+        <div className="text-center">
+          {/* SCEAP Logo/Brand */}
+          <div className="mb-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full mb-4">
+              <span className="text-white font-bold text-xl">S</span>
+            </div>
+            <h3 className="text-white font-semibold text-lg">SCEAP</h3>
+            <p className="text-slate-400 text-sm">Smart Cable Engineering & Analysis Platform</p>
+          </div>
+
+          {/* Circular Progress */}
+          <div className="relative mb-6">
+            <div className="w-20 h-20 mx-auto">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  className="text-slate-700"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="45"
+                  stroke="currentColor"
+                  strokeWidth="8"
+                  fill="transparent"
+                  strokeDasharray={`${2 * Math.PI * 45}`}
+                  strokeDashoffset={`${2 * Math.PI * 45 * (1 - (progress || 0) / 100)}`}
+                  className="text-cyan-500 transition-all duration-300 ease-in-out"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+              </div>
+            </div>
+          </div>
+
+          {/* Loading Message */}
+          <div className="space-y-2">
+            <p className="text-white font-medium">{message}</p>
+            <p className="text-slate-400 text-sm animate-pulse">
+              {loadingMessages[Math.floor(Math.random() * loadingMessages.length)]}
+            </p>
+            {progress && (
+              <div className="w-full bg-slate-700 rounded-full h-2 mt-4">
+                <div
+                  className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SizingTab = () => {
   const [feederData, setFeederData] = useState<FeederData[]>([]);
   const [feederHeaders, setFeederHeaders] = useState<string[]>([]);
   const [catalogueData, setCatalogueData] = useState<CableCatalogue[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
   const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [isLoadingFeeder, setIsLoadingFeeder] = useState(false);
+  const [isLoadingCatalogue, setIsLoadingCatalogue] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
 
   // Default cable catalogue
   const defaultCatalogue: CableCatalogue[] = [
@@ -48,60 +129,98 @@ const SizingTab = () => {
 
   const onFeederDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
+    setIsLoadingFeeder(true);
+    setLoadingMessage('Reading Excel file...');
+
     const reader = new FileReader();
+
+    reader.onloadstart = () => {
+      setLoadingMessage('Initializing file reader...');
+    };
+
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const progress = Math.round((e.loaded / e.total) * 30); // First 30% for reading
+        setLoadingMessage(`Reading file... ${progress}%`);
+      }
+    };
 
     reader.onload = (e) => {
       try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, {
-          type: 'array',
-          cellDates: true,
-          cellNF: false,
-          cellText: false
-        });
+        setLoadingMessage('Parsing Excel data...');
 
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
+        // Simulate parsing progress
+        setTimeout(() => setLoadingMessage('Analyzing worksheet structure...'), 200);
+        setTimeout(() => setLoadingMessage('Extracting column headers...'), 400);
+        setTimeout(() => setLoadingMessage('Processing data rows...'), 600);
 
-        // Use sheet_to_json with header: 1 to get array of arrays
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-          header: 1,
-          defval: '',
-          blankrows: false
-        });
-
-        if (jsonData.length === 0) {
-          alert('No data found in the Excel file');
-          return;
-        }
-
-        // First row is headers
-        const headers = jsonData[0] as string[];
-        const rows = jsonData.slice(1) as any[][];
-
-        // Filter out completely empty rows
-        const validRows = rows.filter(row =>
-          row.some(cell => cell !== null && cell !== undefined && cell !== '')
-        );
-
-        // Convert to feeder data format, preserving original column names
-        const feeders: FeederData[] = validRows.map((row, index) => {
-          const feeder: any = { id: index + 1 };
-          headers.forEach((header, colIndex) => {
-            // Preserve original header name
-            const originalHeader = header || `Column_${colIndex + 1}`;
-            feeder[originalHeader] = row[colIndex] || '';
+        setTimeout(() => {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, {
+            type: 'array',
+            cellDates: true,
+            cellNF: false,
+            cellText: false
           });
-          return feeder as FeederData;
-        });
 
-        setFeederHeaders(headers);
-        setFeederData(feeders);
+          setLoadingMessage('Validating data integrity...');
 
-        console.log(`Loaded ${feeders.length} feeders with ${headers.length} columns`);
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+
+          // Use sheet_to_json with header: 1 to get array of arrays
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            header: 1,
+            defval: '',
+            blankrows: false
+          });
+
+          if (jsonData.length === 0) {
+            alert('No data found in the Excel file');
+            setIsLoadingFeeder(false);
+            return;
+          }
+
+          setLoadingMessage('Filtering and cleaning data...');
+
+          // First row is headers
+          const headers = jsonData[0] as string[];
+          const rows = jsonData.slice(1) as any[][];
+
+          // Filter out completely empty rows
+          const validRows = rows.filter(row =>
+            row.some(cell => cell !== null && cell !== undefined && cell !== '')
+          );
+
+          setLoadingMessage('Finalizing data structure...');
+
+          // Convert to feeder data format, preserving original column names
+          const feeders: FeederData[] = validRows.map((row, index) => {
+            const feeder: any = { id: index + 1 };
+            headers.forEach((header, colIndex) => {
+              // Preserve original header name
+              const originalHeader = header || `Column_${colIndex + 1}`;
+              feeder[originalHeader] = row[colIndex] || '';
+            });
+            return feeder as FeederData;
+          });
+
+          setLoadingMessage('Data processing complete!');
+
+          setTimeout(() => {
+            setFeederHeaders(headers);
+            setFeederData(feeders);
+            setIsLoadingFeeder(false);
+
+            console.log(`Loaded ${feeders.length} feeders with ${headers.length} columns`);
+          }, 500);
+
+        }, 800);
+
       } catch (error) {
         console.error('Error parsing Excel file:', error);
         alert('Error parsing Excel file. Please check the file format and try again.');
+        setIsLoadingFeeder(false);
       }
     };
 
@@ -110,38 +229,70 @@ const SizingTab = () => {
 
   const onCatalogueDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
+    setIsLoadingCatalogue(true);
+    setLoadingMessage('Reading cable catalogue...');
+
     const reader = new FileReader();
+
+    reader.onloadstart = () => {
+      setLoadingMessage('Initializing catalogue reader...');
+    };
+
+    reader.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const progress = Math.round((e.loaded / e.total) * 30);
+        setLoadingMessage(`Reading catalogue... ${progress}%`);
+      }
+    };
 
     reader.onload = (e) => {
       try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, {
-          type: 'array',
-          cellDates: true,
-          cellNF: false,
-          cellText: false
-        });
+        setLoadingMessage('Parsing catalogue data...');
 
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
+        setTimeout(() => setLoadingMessage('Analyzing cable specifications...'), 200);
+        setTimeout(() => setLoadingMessage('Validating electrical parameters...'), 400);
+        setTimeout(() => setLoadingMessage('Processing cable sizes...'), 600);
 
-        // Parse as objects to maintain data types
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-          defval: '',
-          blankrows: false
-        });
+        setTimeout(() => {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, {
+            type: 'array',
+            cellDates: true,
+            cellNF: false,
+            cellText: false
+          });
 
-        // Filter out completely empty objects
-        const validData = jsonData.filter((row: any) =>
-          Object.values(row).some(val => val !== null && val !== undefined && val !== '')
-        );
+          setLoadingMessage('Extracting cable data...');
 
-        setCatalogueData(validData as CableCatalogue[]);
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
 
-        console.log(`Loaded ${validData.length} catalogue entries`);
+          // Parse as objects to maintain data types
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            defval: '',
+            blankrows: false
+          });
+
+          // Filter out completely empty objects
+          const validData = jsonData.filter((row: any) =>
+            Object.values(row).some(val => val !== null && val !== undefined && val !== '')
+          );
+
+          setLoadingMessage('Catalogue processing complete!');
+
+          setTimeout(() => {
+            setCatalogueData(validData as CableCatalogue[]);
+            setIsLoadingCatalogue(false);
+
+            console.log(`Loaded ${validData.length} catalogue entries`);
+          }, 500);
+
+        }, 800);
+
       } catch (error) {
         console.error('Error parsing catalogue Excel file:', error);
         alert('Error parsing catalogue Excel file. Please check the file format and try again.');
+        setIsLoadingCatalogue(false);
       }
     };
 
@@ -189,6 +340,11 @@ const SizingTab = () => {
 
   return (
     <div className="space-y-6">
+      {/* Loading Overlay */}
+      {(isLoadingFeeder || isLoadingCatalogue) && (
+        <LoadingOverlay message={loadingMessage} />
+      )}
+
       {/* Upload Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Feeder List Upload */}
@@ -203,18 +359,28 @@ const SizingTab = () => {
               feederDropzone.isDragActive
                 ? 'border-cyan-400 bg-cyan-400/10'
                 : 'border-slate-600 hover:border-slate-500'
-            }`}
+            } ${isLoadingFeeder ? 'pointer-events-none opacity-50' : ''}`}
           >
             <input {...feederDropzone.getInputProps()} />
-            <FileText size={48} className="mx-auto mb-4 text-slate-400" />
-            <p className="text-slate-300 mb-2">
-              {feederDropzone.isDragActive
-                ? 'Drop the Excel file here...'
-                : 'Drag & drop feeder list Excel file, or click to select'}
-            </p>
-            <p className="text-sm text-slate-500">
-              Supports .xlsx and .xls files
-            </p>
+            {isLoadingFeeder ? (
+              <>
+                <Loader2 size={48} className="mx-auto mb-4 text-cyan-400 animate-spin" />
+                <p className="text-cyan-400 mb-2 font-medium">Processing feeder data...</p>
+                <p className="text-sm text-slate-500">Please wait while we analyze your file</p>
+              </>
+            ) : (
+              <>
+                <FileText size={48} className="mx-auto mb-4 text-slate-400" />
+                <p className="text-slate-300 mb-2">
+                  {feederDropzone.isDragActive
+                    ? 'Drop the Excel file here...'
+                    : 'Drag & drop feeder list Excel file, or click to select'}
+                </p>
+                <p className="text-sm text-slate-500">
+                  Supports .xlsx and .xls files
+                </p>
+              </>
+            )}
           </div>
           {feederData.length > 0 && (
             <p className="mt-4 text-green-400 text-sm">
@@ -235,18 +401,28 @@ const SizingTab = () => {
               catalogueDropzone.isDragActive
                 ? 'border-cyan-400 bg-cyan-400/10'
                 : 'border-slate-600 hover:border-slate-500'
-            }`}
+            } ${isLoadingCatalogue ? 'pointer-events-none opacity-50' : ''}`}
           >
             <input {...catalogueDropzone.getInputProps()} />
-            <FileText size={48} className="mx-auto mb-4 text-slate-400" />
-            <p className="text-slate-300 mb-2">
-              {catalogueDropzone.isDragActive
-                ? 'Drop the catalogue file here...'
-                : 'Drag & drop cable catalogue Excel file, or click to select'}
-            </p>
-            <p className="text-sm text-slate-500">
-              Optional - Default IEC catalogue will be used if not provided
-            </p>
+            {isLoadingCatalogue ? (
+              <>
+                <Loader2 size={48} className="mx-auto mb-4 text-cyan-400 animate-spin" />
+                <p className="text-cyan-400 mb-2 font-medium">Processing cable catalogue...</p>
+                <p className="text-sm text-slate-500">Please wait while we validate specifications</p>
+              </>
+            ) : (
+              <>
+                <FileText size={48} className="mx-auto mb-4 text-slate-400" />
+                <p className="text-slate-300 mb-2">
+                  {catalogueDropzone.isDragActive
+                    ? 'Drop the catalogue file here...'
+                    : 'Drag & drop cable catalogue Excel file, or click to select'}
+                </p>
+                <p className="text-sm text-slate-500">
+                  Optional - Default IEC catalogue will be used if not provided
+                </p>
+              </>
+            )}
           </div>
           {catalogueData.length > 0 && (
             <p className="mt-4 text-green-400 text-sm">
