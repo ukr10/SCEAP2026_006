@@ -94,9 +94,14 @@ const OptimizationTab = () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h4 className="text-white font-semibold">{path.pathId}</h4>
-                <p className="text-slate-400 text-sm">
+                <p className="text-slate-400 text-sm mb-1">
                   {path.startEquipment} → {path.endTransformer}
                 </p>
+                {path.startEquipmentDescription && (
+                  <p className="text-cyan-300 text-xs">
+                    📋 {path.startEquipmentDescription}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -111,19 +116,33 @@ const OptimizationTab = () => {
 
             {/* Path Chain Visualization */}
             <div className="mb-4 p-4 bg-slate-900/50 rounded overflow-x-auto">
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <div className="px-3 py-1 bg-red-900/50 border border-red-500 rounded text-white text-sm font-medium">
-                  {path.endTransformer}
+              <div className="flex items-center gap-2 whitespace-nowrap text-xs">
+                {/* Start Equipment */}
+                <div className="px-3 py-1 bg-green-900/50 border border-green-500 rounded text-white font-medium min-w-max">
+                  <div>{path.startEquipment}</div>
+                  <div className="text-slate-300 text-xs">{path.startEquipmentDescription}</div>
                 </div>
+                
+                {/* Cable chain path */}
                 {path.cables.map((cable, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <ArrowRight className="text-cyan-400 flex-shrink-0" size={16} />
-                    <div className="px-3 py-1 bg-blue-900/50 border border-blue-500 rounded text-white text-xs">
+                    <div className="px-3 py-1 bg-blue-900/50 border border-blue-500 rounded text-white min-w-max">
                       <div className="font-medium">{cable.toBus}</div>
                       <div className="text-slate-300 text-xs">{cable.cableNumber}</div>
                     </div>
                   </div>
                 ))}
+                
+                {/* Transformer endpoint - only show once */}
+                {path.cables.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <ArrowRight className="text-cyan-400 flex-shrink-0" size={16} />
+                    <div className="px-3 py-1 bg-red-900/50 border border-red-500 rounded text-white font-medium min-w-max">
+                      {path.endTransformer}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -164,21 +183,29 @@ const OptimizationTab = () => {
             {/* Expanded Cable Details */}
             {selectedPath === path.pathId && (
               <div className="mt-4 pt-4 border-t border-slate-700">
-                <h5 className="text-white font-medium mb-3">Cable Details</h5>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
+                <h5 className="text-white font-medium mb-3">Cable Details (Step by Step)</h5>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
                   {path.cables.map((cable, idx) => (
-                    <div key={idx} className="bg-slate-700/50 rounded p-3 text-sm">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-white font-medium">{cable.cableNumber}</span>
+                    <div key={idx} className="bg-slate-700/50 rounded p-3 text-sm border-l-4 border-cyan-500">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <span className="text-white font-bold text-base">Step {idx + 1}:</span>
+                          <span className="text-cyan-300 font-medium ml-2">{cable.cableNumber}</span>
+                        </div>
                         <span className="text-slate-400 text-xs">#{cable.serialNo}</span>
                       </div>
+                      {cable.feederDescription && (
+                        <p className="text-yellow-300 text-xs mb-2 italic">
+                          📋 {cable.feederDescription}
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-                        <p>From: <span className="text-cyan-300">{cable.fromBus}</span></p>
-                        <p>To: <span className="text-cyan-300">{cable.toBus}</span></p>
-                        <p>Length: <span className="text-cyan-300">{cable.length}m</span></p>
-                        <p>Load: <span className="text-cyan-300">{cable.loadKW}kW</span></p>
-                        <p>Voltage: <span className="text-cyan-300">{cable.voltage}V</span></p>
-                        <p>Derating: <span className="text-cyan-300">{cable.deratingFactor}</span></p>
+                        <p>From Bus: <span className="text-cyan-300 font-medium">{cable.fromBus}</span></p>
+                        <p>To Bus: <span className="text-cyan-300 font-medium">{cable.toBus}</span></p>
+                        <p>Length: <span className="text-green-300">{cable.length}m</span></p>
+                        <p>Load: <span className="text-green-300">{cable.loadKW}kW</span></p>
+                        <p>Voltage: <span className="text-green-300">{cable.voltage}V</span></p>
+                        <p>Derating: <span className="text-orange-300">{(cable.deratingFactor * 100).toFixed(0)}%</span></p>
                       </div>
                     </div>
                   ))}

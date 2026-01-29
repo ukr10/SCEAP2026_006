@@ -6,6 +6,7 @@
 export interface CablePath {
   pathId: string;
   startEquipment: string;
+  startEquipmentDescription: string;
   startPanel: string;
   endTransformer: string;
   cables: CableSegment[];
@@ -21,6 +22,7 @@ export interface CablePath {
 export interface CableSegment {
   serialNo: number;
   cableNumber: string;
+  feederDescription: string;
   fromBus: string;
   toBus: string;
   voltage: number;
@@ -50,6 +52,7 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
     .map((feeder: any) => ({
       serialNo: feeder['Serial No'] || feeder['serialNo'] || 0,
       cableNumber: feeder['Cable Number'] || feeder['cableNumber'] || '',
+      feederDescription: feeder['Feeder Description'] || feeder['feederDescription'] || feeder['Description'] || '',
       fromBus: feeder['From Bus'] || feeder['fromBus'] || '',
       toBus: feeder['To Bus'] || feeder['toBus'] || '',
       voltage: Number(feeder['Voltage (V)'] || feeder['voltage'] || 415),
@@ -143,6 +146,7 @@ const tracePathToTransformer = (
   let finalPath: CablePath = {
     pathId: '',
     startEquipment,
+    startEquipmentDescription: '',
     startPanel: startEquipment,
     endTransformer: '',
     cables: [],
@@ -182,9 +186,14 @@ const tracePathToTransformer = (
       const voltageDrop = calculateSegmentVoltageDrop(newPath[0], 0.1);
       const voltageDropPercent = (voltageDrop / totalVoltage) * 100;
 
+      // Get equipment description from the last cable in the path (connects to transformer)
+      const lastCable = newPath[newPath.length - 1];
+      const equipmentDescription = lastCable?.feederDescription || '';
+
       finalPath = {
         pathId: '',
         startEquipment,
+        startEquipmentDescription: equipmentDescription,
         startPanel: newPath[newPath.length - 1]?.fromBus || startEquipment,
         endTransformer: connectingCable.toBus,
         cables: newPath,
