@@ -36,6 +36,8 @@ interface CableSizingResult {
   numberOfRuns: number;
   cableSizeSQMM: number;
   cableDesignation: string;
+  anomalies?: string[];
+  isAnomaly?: boolean;
 }
 
 // Standard cable sizing table (mm² → max current capacity at 70°C)
@@ -57,6 +59,42 @@ const CABLE_AMPACITY: Record<number, number> = {
   185: 475,
   240: 550,
   300: 630,
+};
+
+// Simple data validation to flag suspicious inputs or results
+const detectAnomalies = (
+  cable: CableSegment,
+  result: CableSizingResult
+): string[] => {
+  const issues: string[] = [];
+
+  if (!cable.loadKW || cable.loadKW === 0) {
+    issues.push('Zero load (check input Load kW)');
+  }
+
+  if (!cable.voltage || cable.voltage <= 0) {
+    issues.push('Invalid system voltage');
+  }
+
+  if (!cable.length || cable.length <= 0) {
+    issues.push('Zero or missing cable length');
+  }
+
+  if (!cable.deratingFactor || cable.deratingFactor <= 0) {
+    issues.push('Invalid derating factor');
+  }
+
+  // if final size is unrealistically small for a loaded feeder
+  if (result.cableSizeSQMM <= 2 && result.loadKW > 0) {
+    issues.push('Selected conductor area too small for load');
+  }
+
+  // check voltage drop anomaly
+  if (result.voltageDropPercent > 50) {
+    issues.push('Very high voltage drop (>50%)');
+  }
+
+  return issues;
 };
 
 // Copper cable resistance at 70°C (Ω/km)
@@ -232,6 +270,37 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
 const ResultsTab = () => {
   const { pathAnalysis } = usePathContext();
   const [results, setResults] = useState<CableSizingResult[]>([]);
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('results_visible_columns');
+      return raw ? JSON.parse(raw) : {
+        sizeI: true,
+        sizeV: true,
+        sizeIsc: true,
+        finalSize: true,
+        runs: true,
+        designation: true,
+        breaker: true,
+        status: true,
+      };
+    } catch {
+      return {
+        sizeI: true,
+        sizeV: true,
+        sizeIsc: true,
+        finalSize: true,
+        runs: true,
+        designation: true,
+        breaker: true,
+        status: true,
+      };
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('results_visible_columns', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
 
   // Generate results from paths on component mount
   const generateResults = () => {
@@ -246,8 +315,12 @@ const ResultsTab = () => {
       path.cables.forEach((cable) => {
         if (!seen.has(cable.serialNo)) {
           seen.add(cable.serialNo);
-          const result = calculateCableSizing(cable);
-          allCables.push(result);
+            const result = calculateCableSizing(cable);
+            // detect anomalies based on inputs and sizing
+            const issues = detectAnomalies(cable, result);
+            result.anomalies = issues;
+            result.isAnomaly = issues.length > 0;
+            allCables.push(result);
         }
       });
     });
@@ -429,8 +502,31 @@ const ResultsTab = () => {
               <Download size={16} />
               PDF
             </button>
+            <button
+              onClick={() => setShowCustomize((s) => !s)}
+              className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-sm"
+            >
+              Customize
+            </button>
           </div>
         </div>
+        {showCustomize && (
+          <div className="mt-3 p-3 bg-slate-700/40 rounded border border-slate-600">
+            <div className="text-sm text-slate-200 font-medium mb-2">Customize Columns</div>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {Object.entries(visibleColumns).map(([key, val]) => (
+                <label key={key} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={val}
+                    onChange={() => setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }))}
+                  />
+                  <span className="capitalize">{key}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
           <div className="text-center bg-slate-700/50 rounded p-3">
@@ -501,26 +597,30 @@ const ResultsTab = () => {
                 <th className="px-3 py-2 text-center text-slate-300">
                   V-Drop (%)
                 </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  Size-I (mm²)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  Size-V (mm²)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  Size-Isc (mm²)
-                </th>
-                <th className="px-3 py-2 text-center font-bold text-cyan-400">
-                  Final Size (mm²)
-                </th>
-                <th className="px-3 py-2 text-center font-bold text-green-400">
-                  No. of Runs
-                </th>
-                <th className="px-3 py-2 text-center font-bold text-purple-400 min-w-[220px]">
-                  Cable Designation
-                </th>
-                <th className="px-3 py-2 text-left text-slate-300">Breaker</th>
-                <th className="px-3 py-2 text-center text-slate-300">Status</th>
+                {visibleColumns.sizeI && (
+                  <th className="px-3 py-2 text-center text-slate-300">Size-I (mm²)</th>
+                )}
+                {visibleColumns.sizeV && (
+                  <th className="px-3 py-2 text-center text-slate-300">Size-V (mm²)</th>
+                )}
+                {visibleColumns.sizeIsc && (
+                  <th className="px-3 py-2 text-center text-slate-300">Size-Isc (mm²)</th>
+                )}
+                {visibleColumns.finalSize && (
+                  <th className="px-3 py-2 text-center font-bold text-cyan-400">Final Size (mm²)</th>
+                )}
+                {visibleColumns.runs && (
+                  <th className="px-3 py-2 text-center font-bold text-green-400">No. of Runs</th>
+                )}
+                {visibleColumns.designation && (
+                  <th className="px-3 py-2 text-center font-bold text-purple-400 min-w-[220px]">Cable Designation</th>
+                )}
+                {visibleColumns.breaker && (
+                  <th className="px-3 py-2 text-left text-slate-300">Breaker</th>
+                )}
+                {visibleColumns.status && (
+                  <th className="px-3 py-2 text-center text-slate-300">Status</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
@@ -568,27 +668,27 @@ const ResultsTab = () => {
                   >
                     {result.voltageDropPercent.toFixed(2)}
                   </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.sizeByCurrent}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.sizeByVoltageDrop}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.sizeByShortCircuit}
-                  </td>
-                  <td className="px-3 py-2 text-center font-bold text-cyan-400 bg-slate-700/50 rounded">
-                    {result.suitableCableSize}
-                  </td>
-                  <td className="px-3 py-2 text-center font-bold text-green-400 bg-slate-700/50 rounded">
-                    {result.numberOfRuns}
-                  </td>
-                  <td className="px-3 py-2 text-center font-bold text-purple-300 bg-purple-900/30 rounded whitespace-nowrap min-w-[220px]">
-                    {result.cableDesignation}
-                  </td>
-                  <td className="px-3 py-2 text-slate-300">
-                    {result.breakerSize}
-                  </td>
+                    {visibleColumns.sizeI && (
+                      <td className="px-3 py-2 text-center text-slate-300">{result.sizeByCurrent}</td>
+                    )}
+                    {visibleColumns.sizeV && (
+                      <td className="px-3 py-2 text-center text-slate-300">{result.sizeByVoltageDrop}</td>
+                    )}
+                    {visibleColumns.sizeIsc && (
+                      <td className="px-3 py-2 text-center text-slate-300">{result.sizeByShortCircuit}</td>
+                    )}
+                    {visibleColumns.finalSize && (
+                      <td className="px-3 py-2 text-center font-bold text-cyan-400 bg-slate-700/50 rounded">{result.suitableCableSize}</td>
+                    )}
+                    {visibleColumns.runs && (
+                      <td className="px-3 py-2 text-center font-bold text-green-400 bg-slate-700/50 rounded">{result.numberOfRuns}</td>
+                    )}
+                    {visibleColumns.designation && (
+                      <td className="px-3 py-2 text-center font-bold text-purple-300 bg-purple-900/30 rounded whitespace-nowrap min-w-[220px]">{result.cableDesignation}</td>
+                    )}
+                    {visibleColumns.breaker && (
+                      <td className="px-3 py-2 text-slate-300">{result.breakerSize}</td>
+                    )}
                   <td className="px-3 py-2 text-center align-middle">
                     {result.status === 'valid' ? (
                       <span className="inline-flex items-center gap-2 px-2 py-1 rounded bg-green-500/20 text-green-300 text-xs font-medium">
