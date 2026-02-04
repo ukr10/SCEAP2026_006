@@ -86,9 +86,12 @@ const getColumnValue = (row: any, ...variations: string[]): any => {
     }
   }
   
-  // Try partial match (key contains variation)
+  // Try partial match (key contains variation) - but prioritize longer variations (more specific)
   const rowKeys = Object.keys(row);
-  for (const v of variations) {
+  // Sort variations by length descending (longer = more specific)
+  const sortedVariations = [...variations].sort((a, b) => b.length - a.length);
+  
+  for (const v of sortedVariations) {
     const partial = rowKeys.find(k => k.toLowerCase().includes(v.toLowerCase()));
     if (partial && row[partial] !== undefined && row[partial] !== null && row[partial] !== '') {
       return row[partial];
@@ -148,6 +151,11 @@ export const autoDetectColumnMappings = (headers: string[]): Record<string, stri
  * Maps various column naming conventions to standard properties
  */
 export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
+  // DEBUG: Log first feeder's keys to see what columns are available
+  if (rawFeeders.length > 0) {
+    console.log('[NORMALIZEFEEDERS] Available columns in first feeder:', Object.keys(rawFeeders[0]));
+  }
+
   return rawFeeders
     .filter((f: any) => {
       // Check if row has at least From Bus data
@@ -182,14 +190,16 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
       }
 
       // Get voltage for phase detection
-      const voltage = getNumber(
-        getColumnValue(feeder, 'Voltage (V)', 'Voltage', 'V (V)', 'V', 'voltage (v)', 'rated voltage', 'nominal voltage'),
-        415
-      );
+      const voltageRaw = getColumnValue(feeder, 'Voltage (V)', 'Voltage', 'V (V)', 'V', 'voltage (v)', 'rated voltage', 'nominal voltage');
+      const voltage = getNumber(voltageRaw, 415);
       
       // DEBUG: Log voltage extraction
       const cableNum = getString(getColumnValue(feeder, 'cableNumber', 'Cable Number', 'Cable No', 'Cable', 'Feeder', 'cable number', 'cable no', 'feeder id'), '');
-      console.log(`[NORMALIZEFEEDERS] Cable ${cableNum}: voltage=${voltage}`);
+      if (!voltageRaw) {
+        console.log(`[NORMALIZEFEEDERS] Cable ${cableNum}: voltageRaw=undefined, using default 415`);
+      } else {
+        console.log(`[NORMALIZEFEEDERS] Cable ${cableNum}: voltageRaw=${voltageRaw}, voltage=${voltage}`);
+      }
 
       return {
         serialNo: getNumber(getColumnValue(feeder, 'serialNo', 'Serial No', 'S.No', 'SNo', 'serial no', 'index', 'no'), 0),
@@ -417,7 +427,7 @@ const tracePathToTransformer = (
           validationMessage:
             voltageDropPercent <= 5
               ? `✓ V-drop: ${voltageDropPercent.toFixed(2)}% (IEC 60364 Compliant)`
-              : `⚠ V-drop: ${voltageDropPercent.toFixed(2)}% (Exceeds 5% - Upgrade cable size for compliance)`
+              : `ℹ V-drop: ${voltageDropPercent.toFixed(2)}% (Path exceeds 5% limit - Optimize cable sizing for better compliance)`
         };
         // return the first valid path found for this equipment
         return finalPath;

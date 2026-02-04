@@ -7,6 +7,7 @@ import { usePathContext } from '../context/PathContext';
 import { CableSegment } from '../utils/pathDiscoveryService';
 import CableSizingEngine_V2, { CableSizingInput as CableSizingInputV2 } from '../utils/CableSizingEngine_V2';
 import { LoadTypeSpecs } from '../utils/CableEngineeringData';
+import { KEC_CATALOGUE } from '../utils/KEC_CableStandard';
 
 // Result type for display - maps engine output to UI fields
 interface CableSizingResult {
@@ -22,35 +23,67 @@ interface CableSizingResult {
   powerFactor: number;
   efficiency: number;
   deratingFactor: number;
+  deratingComponents?: {
+    K_temp: number;
+    K_group: number;
+    K_soil: number;
+    K_depth: number;
+  };
   conductorMaterial: 'Cu' | 'Al';
   numberOfCores: '1C' | '2C' | '3C' | '4C';
   
-  // Calculated values
+  // Load & current calculations
   fullLoadCurrent: number;
   startingCurrent?: number;
   deratedCurrent: number;
-  cableResistance: number;
-  voltageDrop: number;
-  voltageDropPercent: number;
+  cableResistance_ohm_per_km: number; // From catalogue for selected size (Ω/km)
   
-  // Cable size calculations
-  sizeByCurrent: number;
-  sizeByVoltageDrop: number;
-  sizeByShortCircuit: number;
+  // Voltage drop values
+  voltageDrop_running_volt: number;
+  voltageDrop_running_percent: number;
+  voltageDrop_starting_volt?: number;
+  voltageDrop_starting_percent?: number;
+  
+  // Cable size constraints
+  sizeByCurrent: number; // Size required by ampacity constraint (mm²)
+  sizeByVoltageDrop_running: number; // Size required by running V-drop (mm²)
+  sizeByVoltageDrop_starting?: number; // Size required by starting V-drop (mm²)
+  sizeByShortCircuit: number; // Size required by ISc (mm²)
+  
+  // Selected cable
   suitableCableSize: number; // Final selected conductor area (mm²)
-  numberOfRuns: number;
+  numberOfRuns: number; // Number of parallel runs (1, 2, or 3)
+  sizePerRun?: number; // If runs > 1, size per individual run
   
-  // Results
-  cableDesignation: string;
-  drivingConstraint: 'Ampacity' | 'RunningVdrop' | 'StartingVdrop' | 'ISc'; // Which constraint drove selection
-  catalogRating: number; // Current rating from catalog
-  shortCircuitCurrent?: number;
-  breakerSize?: string;
+  // Cable identification
+  cableDesignation: string; // e.g., "3C × 70mm² Cu XLPE" or "2×(3C × 50mm²) Cu XLPE"
+  drivingConstraint: 'Ampacity' | 'RunningVdrop' | 'StartingVdrop' | 'ISc';
+  
+  // Catalog data
+  catalogRating: number; // Current rating from catalog at selected size (A)
+  
+  // ISc check
+  shortCircuitCurrent_kA?: number;
+  shortCircuitWithstand_kA?: number;
+  
+  // Status
   status: 'APPROVED' | 'WARNING' | 'FAILED';
   anomalies?: string[];
   warnings?: string[];
   isAnomaly?: boolean;
 }
+
+// Helper: Get conductor resistance from KEC catalogue for a specific size + cores
+const getConductorResistance = (size: number, cores: string): number => {
+  const coreKey = cores as keyof typeof KEC_CATALOGUE;
+  const coreTable = KEC_CATALOGUE[coreKey];
+  if (!coreTable) return 0.1; // Fallback
+  
+  const entry = coreTable.find((e: any) => e.size === size);
+  if (!entry) return 0.1; // Fallback
+  
+  return entry.resistance || 0.1;
+};
 
 // Simple data validation to flag suspicious inputs or results
 const detectAnomalies = (
@@ -81,7 +114,7 @@ const detectAnomalies = (
   }
 
   // check voltage drop anomaly
-  if (result.voltageDropPercent > 50) {
+  if (result.voltageDrop_running_percent > 50) {
     issues.push('Very high voltage drop (>50%)');
   }
 
@@ -110,10 +143,19 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
     console.log(`  installationMethod: ${cable.installationMethod}`);
     console.log(`  loadType: ${loadType}`);
     
+    // VALIDATION: Check for critical missing values
+    if (!cable.voltage || cable.voltage <= 0) {
+      console.error(`[ERROR] Missing/invalid voltage for ${cable.cableNumber}:`, cable.voltage);
+      throw new Error(`Invalid voltage: ${cable.voltage}`);
+    }
+    if (!cable.loadKW || cable.loadKW <= 0) {
+      console.error(`[ERROR] Missing/invalid loadKW for ${cable.cableNumber}:`, cable.loadKW);
+      throw new Error(`Invalid loadKW: ${cable.loadKW}`);
+    }
     const engineInput: CableSizingInputV2 = {
       loadType,
       ratedPowerKW: cable.loadKW || 0.1,
-      voltage: cable.voltage,
+      voltage: cable.voltage || 415, // Default to 415V if not specified
       phase: cable.phase || '3Ø',
       efficiency: cable.efficiency || specs.typicalEfficiency || 0.95,
       powerFactor: cable.powerFactor || specs.typicalPowerFactor || 0.85,
@@ -141,8 +183,16 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
     console.log(`[ENGINE OUTPUT] for ${cable.cableNumber}:`, {
       fullLoadCurrent: engineResult.fullLoadCurrent,
       sizeByAmpacity: engineResult.sizeByAmpacity,
+      selectedConductorArea: engineResult.selectedConductorArea,
+      numberOfRuns: engineResult.numberOfRuns,
       status: engineResult.status
     });
+
+    // Get resistance from catalogue based on selected size + cores
+    const cableResistance = getConductorResistance(
+      engineResult.selectedConductorArea,
+      engineInput.numberOfCores
+    );
 
     // Map result to display format (using engine outputs directly - they are correct now)
     const result: CableSizingResult = {
@@ -157,24 +207,43 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
       powerFactor: engineInput.powerFactor || 0.85,
       efficiency: engineInput.efficiency || 0.95,
       deratingFactor: engineResult.deratingFactor || 0.87,
+      deratingComponents: engineResult.deratingComponents,
       conductorMaterial: engineInput.conductorMaterial as 'Cu' | 'Al',
       numberOfCores: engineInput.numberOfCores,
+      
+      // Load & current
       fullLoadCurrent: engineResult.fullLoadCurrent || 0,
       startingCurrent: engineResult.startingCurrent || 0,
       deratedCurrent: engineResult.effectiveCurrentAtRun || 0, // This is I_FL / K_total (required rating)
-      cableResistance: 0, // Get from catalog if needed
-      voltageDrop: engineResult.voltageDropRunning_volt || 0,
-      voltageDropPercent: (engineResult.voltageDropRunning_percent || 0) * 100, // Convert to percentage
+      cableResistance_ohm_per_km: cableResistance,
+      
+      // Voltage drop
+      voltageDrop_running_volt: engineResult.voltageDropRunning_volt || 0,
+      voltageDrop_running_percent: (engineResult.voltageDropRunning_percent || 0) * 100, // Convert to percentage
+      voltageDrop_starting_volt: engineResult.voltageDropStarting_volt || 0,
+      voltageDrop_starting_percent: (engineResult.voltageDropStarting_percent || 0) * 100,
+      
+      // Cable size by constraints
       sizeByCurrent: engineResult.sizeByAmpacity || 0,
-      sizeByVoltageDrop: engineResult.sizeByRunningVdrop || 0,
+      sizeByVoltageDrop_running: engineResult.sizeByRunningVdrop || 0,
+      sizeByVoltageDrop_starting: engineResult.sizeByStartingVdrop || 0,
       sizeByShortCircuit: engineResult.sizeByISc || 0,
+      
+      // Selected cable
       suitableCableSize: engineResult.selectedConductorArea || 0,
       numberOfRuns: engineResult.numberOfRuns || 1,
+      sizePerRun: engineResult.sizePerRun || engineResult.selectedConductorArea,
+      
+      // Identification
       cableDesignation: engineResult.cableDesignation || '',
       drivingConstraint: (engineResult.drivingConstraint || 'Ampacity') as any,
       catalogRating: engineResult.catalogRatingPerRun || 0,
-      shortCircuitCurrent: engineResult.shortCircuitWithstand_kA ? engineResult.shortCircuitWithstand_kA * 1000 : 0,
-      breakerSize: `${Math.ceil(engineResult.fullLoadCurrent / 10) * 10}A`,
+      
+      // ISc
+      shortCircuitCurrent_kA: engineResult.shortCircuitIsc_kA,
+      shortCircuitWithstand_kA: engineResult.shortCircuitWithstand_kA,
+      
+      // Status
       status: engineResult.status,
       warnings: engineResult.warnings,
       anomalies: engineResult.warnings
@@ -207,23 +276,27 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
       powerFactor: 0.85,
       efficiency: 0.95,
       deratingFactor: 0.87,
+      deratingComponents: { K_temp: 1, K_group: 1, K_soil: 1, K_depth: 1 },
       conductorMaterial: cable.conductorMaterial || 'Cu',
       numberOfCores: '3C',
       fullLoadCurrent: 0,
       deratedCurrent: 0,
-      cableResistance: 0,
-      voltageDrop: 0,
-      voltageDropPercent: 0,
-      sizeByCurrent: 0,
-      sizeByVoltageDrop: 0,
+      cableResistance_ohm_per_km: 0,
+      voltageDrop_running_volt: 0,
+      voltageDrop_running_percent: 0,
+      sizeByVoltageDrop_running: 0,
       sizeByShortCircuit: 0,
+      sizeByCurrent: 0,
       suitableCableSize: 0,
       numberOfRuns: 1,
       cableDesignation: 'ERROR',
       drivingConstraint: 'Ampacity',
       catalogRating: 0,
       status: 'FAILED',
-      anomalies: ['Cable sizing calculation failed']
+      anomalies: [
+        'Cable sizing calculation failed',
+        error instanceof Error ? error.message : 'Unknown error'
+      ]
     };
   }
 };
@@ -322,20 +395,28 @@ const ResultsTab = () => {
       'Efficiency (%)': (r.efficiency * 100).toFixed(1),
       'FLC (A)': r.fullLoadCurrent.toFixed(2),
       'Derated Current (A)': r.deratedCurrent.toFixed(2),
-      'Cable Resistance (Ω/km)': r.cableResistance.toFixed(4),
-      'V-Drop (V)': r.voltageDrop.toFixed(2),
-      'V-Drop (%)': r.voltageDropPercent.toFixed(2),
+      'Derating K_total': r.deratingFactor.toFixed(3),
+      'K_temp': (r.deratingComponents?.K_temp || 0).toFixed(3),
+      'K_group': (r.deratingComponents?.K_group || 0).toFixed(3),
+      'K_soil': (r.deratingComponents?.K_soil || 0).toFixed(3),
+      'K_depth': (r.deratingComponents?.K_depth || 0).toFixed(3),
+      'Cable Resistance (Ω/km)': r.cableResistance_ohm_per_km.toFixed(4),
+      'Running V-Drop (V)': r.voltageDrop_running_volt.toFixed(2),
+      'Running V-Drop (%)': r.voltageDrop_running_percent.toFixed(2),
+      'Starting V-Drop (V)': (r.voltageDrop_starting_volt || 0).toFixed(2),
+      'Starting V-Drop (%)': (r.voltageDrop_starting_percent || 0).toFixed(2),
       'Size by Current (mm²)': r.sizeByCurrent,
-      'Size by V-Drop (mm²)': r.sizeByVoltageDrop,
+      'Size by Running V-Drop (mm²)': r.sizeByVoltageDrop_running,
+      'Size by Starting V-Drop (mm²)': (r.sizeByVoltageDrop_starting || 0),
       'Size by Isc (mm²)': r.sizeByShortCircuit,
-      'Suitable Cable Size (mm²)': r.suitableCableSize,
+      'Selected Cable Size (mm²)': r.suitableCableSize,
       'Number of Cores': r.numberOfCores,
+      'Number of Runs': r.numberOfRuns,
       'Conductor Material': r.conductorMaterial,
       'Cable Designation': r.cableDesignation,
       'Catalog Rating (A)': r.catalogRating,
       'Driving Constraint': r.drivingConstraint,
-      'Isc (kA)': ((r.shortCircuitCurrent || 0) / 1000).toFixed(1),
-      'Breaker': r.breakerSize,
+      'Isc (kA)': (r.shortCircuitCurrent_kA || 0).toFixed(1),
       'Status': r.status.toUpperCase(),
     }));
 
@@ -366,14 +447,14 @@ const ResultsTab = () => {
         String(r.voltage),
         r.loadKW.toFixed(1),
         r.length.toFixed(1),
+        r.fullLoadCurrent.toFixed(1),
         r.deratedCurrent.toFixed(1),
-        r.voltageDropPercent.toFixed(2),
+        r.voltageDrop_running_percent.toFixed(2),
         String(r.sizeByCurrent),
-        String(r.sizeByVoltageDrop),
+        String(r.sizeByVoltageDrop_running),
         String(r.suitableCableSize),
         String(r.numberOfRuns),
         r.cableDesignation,
-        r.breakerSize,
         r.status.toUpperCase(),
       ]);
 
@@ -392,14 +473,14 @@ const ResultsTab = () => {
               'V',
               'kW',
               'L(m)',
-              'I(A)',
+              'FLC(A)',
+              'Derated(A)',
               'V%',
               'I-Size',
               'V-Size',
               'Final',
               'Runs',
               'Designation',
-              'Breaker',
               'Status',
             ],
           ],
@@ -511,149 +592,166 @@ const ResultsTab = () => {
         </div>
       </div>
 
-      {/* Results Table */}
+      {/* Results Table - 6 SECTION STRUCTURE PER REAL PROJECT SPEC */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-        {/* Scrollable Table Container with both scrollbars */}
-        <div className="overflow-x-auto overflow-y-auto results-table-scroll" style={{ height: '1000px' }}>
-          <table className="w-full min-w-[2000px] text-xs">
-            <thead className="bg-slate-700 sticky top-0">
+        <div className="overflow-x-auto overflow-y-auto results-table-scroll" style={{ height: '1200px' }}>
+          <table className="w-full min-w-[3200px] text-xs border-collapse">
+            <thead className="bg-slate-700 sticky top-0 border-b-2 border-slate-600">
               <tr>
-                <th className="px-3 py-2 text-left text-slate-300">S.No</th>
-                <th className="px-3 py-2 text-left text-slate-300">Cable #</th>
-                <th className="px-3 py-2 text-left text-slate-300">
-                  Feeder Description
-                </th>
-                <th className="px-3 py-2 text-left text-slate-300">From Bus</th>
-                <th className="px-3 py-2 text-left text-slate-300">To Bus</th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  V (V)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  Load (kW)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  L (m)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  FLC (A)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  Derated (A)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  R (Ω/km)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  V-Drop (V)
-                </th>
-                <th className="px-3 py-2 text-center text-slate-300">
-                  V-Drop (%)
-                </th>
-                {visibleColumns.sizeI && (
-                  <th className="px-3 py-2 text-center text-slate-300">Size-I (mm²)</th>
-                )}
-                {visibleColumns.sizeV && (
-                  <th className="px-3 py-2 text-center text-slate-300">Size-V (mm²)</th>
-                )}
-                {visibleColumns.sizeIsc && (
-                  <th className="px-3 py-2 text-center text-slate-300">Size-Isc (mm²)</th>
-                )}
-                {visibleColumns.finalSize && (
-                  <th className="px-3 py-2 text-center font-bold text-cyan-400">Final Size (mm²)</th>
-                )}
-                {visibleColumns.runs && (
-                  <th className="px-3 py-2 text-center font-bold text-green-400">No. of Runs</th>
-                )}
-                {visibleColumns.designation && (
-                  <th className="px-3 py-2 text-center font-bold text-purple-400 min-w-[220px]">Cable Designation</th>
-                )}
-                {visibleColumns.breaker && (
-                  <th className="px-3 py-2 text-left text-slate-300">Breaker</th>
-                )}
-                {visibleColumns.status && (
-                  <th className="px-3 py-2 text-center text-slate-300">Status</th>
-                )}
+                {/* Identity columns */}
+                <th className="px-2 py-2 text-left text-slate-200 font-bold bg-slate-750" rowSpan={2}>S.No</th>
+                <th className="px-2 py-2 text-left text-slate-200 font-bold bg-slate-750" rowSpan={2}>Cable #</th>
+                <th className="px-2 py-2 text-left text-slate-200 font-bold bg-slate-750" rowSpan={2}>Description</th>
+                <th className="px-2 py-2 text-center text-slate-200 font-bold bg-slate-750" rowSpan={2}>From Bus</th>
+                <th className="px-2 py-2 text-center text-slate-200 font-bold bg-slate-750" rowSpan={2}>To Bus</th>
+                <th className="px-2 py-2 text-center text-slate-200 font-bold bg-slate-750" rowSpan={2}>V(V)</th>
+                <th className="px-2 py-2 text-center text-slate-200 font-bold bg-slate-750" rowSpan={2}>Load(kW)</th>
+                <th className="px-2 py-2 text-center text-slate-200 font-bold bg-slate-750" rowSpan={2}>L(m)</th>
+                
+                {/* Section 1: Cable Size Based on Full Load Current */}
+                <th colSpan={3} className="px-3 py-2 text-center text-white font-bold bg-blue-900 border-l border-slate-600">1. Size by FLC</th>
+                
+                {/* Section 2: Cable Size Based on Short Circuit Current */}
+                <th colSpan={2} className="px-3 py-2 text-center text-white font-bold bg-red-900 border-l border-slate-600">2. Size by Isc</th>
+                
+                {/* Section 3: Selected Cable Size  */}
+                <th colSpan={2} className="px-3 py-2 text-center text-white font-bold bg-green-900 border-l border-slate-600">3. Selected Size</th>
+                
+                {/* Section 4: Voltage Drop Running */}
+                <th colSpan={3} className="px-3 py-2 text-center text-white font-bold bg-purple-900 border-l border-slate-600">4. V-Drop Running</th>
+                
+                {/* Section 5: Voltage Drop Starting */}
+                <th colSpan={3} className="px-3 py-2 text-center text-white font-bold bg-orange-900 border-l border-slate-600">5. V-Drop Starting</th>
+                
+                {/* Section 6: Final Designation */}
+                <th colSpan={2} className="px-3 py-2 text-center text-white font-bold bg-cyan-900 border-l border-slate-600">6. Cable Designation</th>
+                
+                {/* Derating Factors Header */}
+                <th colSpan={5} className="px-3 py-2 text-center text-white font-bold bg-slate-900 border-l border-slate-600">Derating Factors (IEC)</th>
+                
+                <th className="px-2 py-2 text-center text-slate-200 font-bold bg-slate-750 border-l border-slate-600" rowSpan={2}>Status</th>
+              </tr>
+              
+              {/* Sub-headers for each section */}
+              <tr className="bg-slate-650">
+                {/* Section 1 sub-headers */}
+                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-600">FLC(A)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">Derated(A)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">Size(mm²)</th>
+                
+                {/* Section 2 sub-headers */}
+                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-600">Isc(kA)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">Size(mm²)</th>
+                
+                {/* Section 3 sub-headers */}
+                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-600">Size(mm²)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">Runs</th>
+                
+                {/* Section 4 sub-headers */}
+                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-600">ΔU(V)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">%(allow 5%)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">OK?</th>
+                
+                {/* Section 5 sub-headers */}
+                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-600">ΔU(V)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">%(allow 15%)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">OK?</th>
+                
+                {/* Section 6 sub-headers */}
+                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-600">Designation</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs">R(Ω/km)</th>
+                
+                {/* Derating Factors */}
+                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-600">K_tot</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs text-xs">K_t</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs text-xs">K_g</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs text-xs">K_s</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs text-xs">K_d</th>
               </tr>
             </thead>
+            
             <tbody className="divide-y divide-slate-700">
               {results.map((result) => (
                 <tr
                   key={`${result.cableNumber}-${result.serialNo}`}
-                  className="hover:bg-slate-700 transition-colors"
+                  className={`hover:bg-slate-700 transition-colors ${result.isAnomaly ? 'bg-red-950/20' : ''}`}
                 >
-                  <td className="px-3 py-2 text-slate-300">{result.serialNo}</td>
-                  <td className="px-3 py-2 text-slate-300">
-                    {result.cableNumber}
-                  </td>
-                  <td className="px-3 py-2 text-slate-300 max-w-xs">
-                    {result.feederDescription}
-                  </td>
-                  <td className="px-3 py-2 text-cyan-300">{result.fromBus}</td>
-                  <td className="px-3 py-2 text-cyan-300">{result.toBus}</td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.voltage}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.loadKW.toFixed(2)}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.length.toFixed(1)}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.fullLoadCurrent.toFixed(1)}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.deratedCurrent.toFixed(1)}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.cableResistance.toFixed(4)}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-300">
-                    {result.voltageDrop.toFixed(2)}
-                  </td>
+                  {/* Identity cells */}
+                  <td className="px-2 py-1 text-slate-300">{result.serialNo}</td>
+                  <td className="px-2 py-1 text-slate-300 font-medium">{result.cableNumber}</td>
+                  <td className="px-2 py-1 text-slate-300 max-w-xs text-xs">{result.feederDescription}</td>
+                  <td className="px-2 py-1 text-cyan-300 text-xs">{result.fromBus}</td>
+                  <td className="px-2 py-1 text-cyan-300 text-xs">{result.toBus}</td>
+                  <td className="px-2 py-1 text-center text-slate-300">{result.voltage}</td>
+                  <td className="px-2 py-1 text-center text-slate-300">{result.loadKW.toFixed(2)}</td>
+                  <td className="px-2 py-1 text-center text-slate-300">{result.length.toFixed(1)}</td>
+                  
+                  {/* Section 1: FLC Sizing */}
+                  <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600">{result.fullLoadCurrent.toFixed(1)}</td>
+                  <td className="px-2 py-1 text-center text-slate-300">{result.deratedCurrent.toFixed(1)}</td>
+                  <td className="px-2 py-1 text-center font-bold text-blue-400">{result.sizeByCurrent}</td>
+                  
+                  {/* Section 2: ISc Sizing */}
+                  <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600">{(result.shortCircuitCurrent_kA || 0).toFixed(1)}</td>
+                  <td className="px-2 py-1 text-center font-bold text-red-400">{result.sizeByShortCircuit}</td>
+                  
+                  {/* Section 3: Selected Cable */}
+                  <td className="px-2 py-1 text-center font-bold text-green-400 bg-slate-700/30 border-l border-slate-600">{result.suitableCableSize}</td>
+                  <td className="px-2 py-1 text-center font-bold text-green-400 bg-slate-700/30">{result.numberOfRuns}</td>
+                  
+                  {/* Section 4: Running V-Drop */}
+                  <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600">{result.voltageDrop_running_volt.toFixed(2)}</td>
                   <td
-                    className={`px-3 py-2 text-center font-bold ${
-                      result.voltageDropPercent <= 5
-                        ? 'text-green-400'
-                        : 'text-red-400'
+                    className={`px-2 py-1 text-center font-bold ${
+                      result.voltageDrop_running_percent <= 5 ? 'text-green-400' : 'text-red-400'
                     }`}
                   >
-                    {result.voltageDropPercent.toFixed(2)}
+                    {result.voltageDrop_running_percent.toFixed(2)}
                   </td>
-                    {visibleColumns.sizeI && (
-                      <td className="px-3 py-2 text-center text-slate-300">{result.sizeByCurrent}</td>
-                    )}
-                    {visibleColumns.sizeV && (
-                      <td className="px-3 py-2 text-center text-slate-300">{result.sizeByVoltageDrop}</td>
-                    )}
-                    {visibleColumns.sizeIsc && (
-                      <td className="px-3 py-2 text-center text-slate-300">{result.sizeByShortCircuit}</td>
-                    )}
-                    {visibleColumns.finalSize && (
-                      <td className="px-3 py-2 text-center font-bold text-cyan-400 bg-slate-700/50 rounded">{result.suitableCableSize}</td>
-                    )}
-                    {visibleColumns.runs && (
-                      <td className="px-3 py-2 text-center font-bold text-green-400 bg-slate-700/50 rounded">{result.numberOfRuns}</td>
-                    )}
-                    {visibleColumns.designation && (
-                      <td className="px-3 py-2 text-center font-bold text-purple-300 bg-purple-900/30 rounded whitespace-nowrap min-w-[220px]">{result.cableDesignation}</td>
-                    )}
-                    {visibleColumns.breaker && (
-                      <td className="px-3 py-2 text-slate-300">{result.breakerSize}</td>
-                    )}
-                  <td className="px-3 py-2 text-center align-middle">
-                    {result.status === 'APPROVED' ? (
-                      <span className="inline-flex items-center gap-2 px-2 py-1 rounded bg-green-500/20 text-green-300 text-xs font-medium">
-                        ✓ APPROVED
-                      </span>
-                    ) : result.status === 'WARNING' ? (
-                      <span className="inline-flex items-center gap-2 px-2 py-1 rounded bg-yellow-500/20 text-yellow-300 text-xs font-medium">
-                        ⚠ WARNING
-                      </span>
+                  <td className="px-2 py-1 text-center font-bold">
+                    {result.voltageDrop_running_percent <= 5 ? (
+                      <span className="text-green-400">✓</span>
                     ) : (
-                      <span className="inline-flex items-center gap-2 px-2 py-1 rounded bg-red-500/20 text-red-300 text-xs font-medium">
-                        ✗ FAILED
-                      </span>
+                      <span className="text-red-400">✗</span>
+                    )}
+                  </td>
+                  
+                  {/* Section 5: Starting V-Drop */}
+                  <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600">{(result.voltageDrop_starting_volt || 0).toFixed(2)}</td>
+                  <td
+                    className={`px-2 py-1 text-center font-bold ${
+                      (result.voltageDrop_starting_percent || 0) <= 15 ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {(result.voltageDrop_starting_percent || 0).toFixed(2)}
+                  </td>
+                  <td className="px-2 py-1 text-center font-bold">
+                    {(result.voltageDrop_starting_percent || 0) <= 15 ? (
+                      <span className="text-green-400">✓</span>
+                    ) : (
+                      <span className="text-red-400">✗</span>
+                    )}
+                  </td>
+                  
+                  {/* Section 6: Cable Designation */}
+                  <td className="px-2 py-1 text-center font-bold text-purple-300 bg-purple-900/30 border-l border-slate-600 whitespace-nowrap min-w-[200px] text-xs">{result.cableDesignation}</td>
+                  <td className="px-2 py-1 text-center text-cyan-300 text-xs">{result.cableResistance_ohm_per_km.toFixed(3)}</td>
+                  
+                  {/* Derating Factors */}
+                  <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600 text-xs font-bold text-orange-400">{result.deratingFactor.toFixed(3)}</td>
+                  <td className="px-2 py-1 text-center text-slate-300 text-xs">{(result.deratingComponents?.K_temp || 1).toFixed(2)}</td>
+                  <td className="px-2 py-1 text-center text-slate-300 text-xs">{(result.deratingComponents?.K_group || 1).toFixed(2)}</td>
+                  <td className="px-2 py-1 text-center text-slate-300 text-xs">{(result.deratingComponents?.K_soil || 1).toFixed(2)}</td>
+                  <td className="px-2 py-1 text-center text-slate-300 text-xs">{(result.deratingComponents?.K_depth || 1).toFixed(2)}</td>
+                  
+                  {/* Status */}
+                  <td className="px-2 py-1 text-center align-middle border-l border-slate-600">
+                    {result.status === 'APPROVED' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-green-500/30 text-green-300 text-xs font-bold">✓</span>
+                    ) : result.status === 'WARNING' ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-yellow-500/30 text-yellow-300 text-xs font-bold">⚠</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-500/30 text-red-300 text-xs font-bold">✗</span>
                     )}
                   </td>
                 </tr>
@@ -693,7 +791,7 @@ const ResultsTab = () => {
             <div className="flex justify-between text-sm">
               <span className="text-slate-300">≤3% (Best)</span>
               <span className="text-green-400 font-medium">
-                {results.filter((r) => r.voltageDropPercent <= 3).length}
+                {results.filter((r) => r.voltageDrop_running_percent <= 3).length}
               </span>
             </div>
             <div className="flex justify-between text-sm">
@@ -702,7 +800,7 @@ const ResultsTab = () => {
                 {
                   results.filter(
                     (r) =>
-                      r.voltageDropPercent > 3 && r.voltageDropPercent <= 5
+                      r.voltageDrop_running_percent > 3 && r.voltageDrop_running_percent <= 5
                   ).length
                 }
               </span>
@@ -710,7 +808,7 @@ const ResultsTab = () => {
             <div className="flex justify-between text-sm">
               <span className="text-slate-300">&gt;5% (Invalid)</span>
               <span className="text-red-400 font-medium">
-                {results.filter((r) => r.voltageDropPercent > 5).length}
+                {results.filter((r) => r.voltageDrop_running_percent > 5).length}
               </span>
             </div>
           </div>

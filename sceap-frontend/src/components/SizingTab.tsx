@@ -5,6 +5,7 @@ import { Upload, FileText, Calculator, Edit, Trash2, Loader2, Download, AlertCir
 import { normalizeFeeders, analyzeAllPaths, autoDetectColumnMappings } from '../utils/pathDiscoveryService';
 import { usePathContext } from '../context/PathContext';
 import { generateDemoData } from '../utils/demoData';
+import { CLEAN_DEMO_FEEDERS } from '../utils/cleanDemoData';
 import ColumnMappingModal from './ColumnMappingModal';
 
 // Template generation function with SIMPLE, WORKING hierarchy
@@ -306,6 +307,29 @@ const SizingTab = () => {
     { size: 500, current: 920, resistance: 0.0366, reactance: 0.02 },
     { size: 630, current: 1100, resistance: 0.0283, reactance: 0.02 }
   ];
+
+  // Load demo data directly - use CLEAN demo data with proper values
+  const handleLoadDemoFeeders = useCallback(() => {
+    const demoFeeders = CLEAN_DEMO_FEEDERS;
+    const headers = Object.keys(demoFeeders[0]);
+    
+    // Create feeder data with id field
+    const feedersWithId = demoFeeders.map((f: any, index: number) => ({ ...f, id: index + 1 }));
+    
+    // Normalize through pathDiscoveryService
+    const normalizedFeeders = normalizeFeeders(feedersWithId);
+    const analysis = analyzeAllPaths(normalizedFeeders);
+    
+    console.log('✓ Demo feeders loaded:', normalizedFeeders.length);
+    console.log('✓ Paths discovered:', analysis.totalPaths);
+    
+    // Store in state
+    setFeederData(feedersWithId);
+    setFeederHeaders(headers);
+    setPathAnalysis(analysis);
+    setContextPathAnalysis(analysis);
+    setContextNormalizedFeeders(normalizedFeeders);
+  }, [setContextPathAnalysis, setContextNormalizedFeeders]);
 
   const onFeederDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -614,13 +638,85 @@ const SizingTab = () => {
     setFeederData(prev => prev.filter(item => item.id !== id));
   };
 
-  // Build catalogue: use custom data if available, otherwise use default
-  const defaultCatalogueWithCores = defaultCatalogue.map(c => ({ ...c, cores: '3C' as const }));
-  const catalogueSheets: Record<string, CableCatalogue[]> = Object.keys(catalogueData).length > 0 ? catalogueData : {
-    '3C': defaultCatalogueWithCores
+  // Build catalogue: use KEC standard as default with proper per-core data
+  // Import KEC at top of file for different ampacity ratings per core config
+  const getKECCatalogue = () => {
+    const KEC = {
+      '1C': [
+        { size: 120, current: 280, resistance: 0.153, reactance: 0.08, cores: '1C' as const },
+        { size: 150, current: 330, resistance: 0.124, reactance: 0.08, cores: '1C' as const },
+        { size: 185, current: 380, resistance: 0.0991, reactance: 0.07, cores: '1C' as const },
+        { size: 240, current: 460, resistance: 0.0754, reactance: 0.07, cores: '1C' as const },
+        { size: 300, current: 550, resistance: 0.0601, reactance: 0.06, cores: '1C' as const },
+        { size: 400, current: 660, resistance: 0.047, reactance: 0.06, cores: '1C' as const },
+        { size: 500, current: 780, resistance: 0.0366, reactance: 0.05, cores: '1C' as const },
+        { size: 630, current: 920, resistance: 0.0283, reactance: 0.05, cores: '1C' as const }
+      ],
+      '2C': [
+        { size: 2.5, current: 27, resistance: 7.41, reactance: 0.08, cores: '2C' as const },
+        { size: 4, current: 36, resistance: 4.61, reactance: 0.08, cores: '2C' as const },
+        { size: 6, current: 46, resistance: 3.08, reactance: 0.07, cores: '2C' as const },
+        { size: 10, current: 63, resistance: 1.83, reactance: 0.07, cores: '2C' as const },
+        { size: 16, current: 85, resistance: 1.15, reactance: 0.06, cores: '2C' as const },
+        { size: 25, current: 115, resistance: 0.727, reactance: 0.06, cores: '2C' as const },
+        { size: 35, current: 145, resistance: 0.524, reactance: 0.05, cores: '2C' as const },
+        { size: 50, current: 180, resistance: 0.387, reactance: 0.05, cores: '2C' as const },
+        { size: 70, current: 225, resistance: 0.268, reactance: 0.05, cores: '2C' as const },
+        { size: 95, current: 275, resistance: 0.193, reactance: 0.04, cores: '2C' as const },
+        { size: 120, current: 320, resistance: 0.153, reactance: 0.04, cores: '2C' as const },
+        { size: 150, current: 370, resistance: 0.124, reactance: 0.04, cores: '2C' as const },
+        { size: 185, current: 425, resistance: 0.0991, reactance: 0.03, cores: '2C' as const },
+        { size: 240, current: 510, resistance: 0.0754, reactance: 0.03, cores: '2C' as const },
+        { size: 300, current: 605, resistance: 0.0601, reactance: 0.03, cores: '2C' as const },
+        { size: 400, current: 730, resistance: 0.047, reactance: 0.02, cores: '2C' as const }
+      ],
+      '3C': [
+        { size: 1.5, current: 20, resistance: 12.1, reactance: 0.08, cores: '3C' as const },
+        { size: 2.5, current: 27, resistance: 7.41, reactance: 0.08, cores: '3C' as const },
+        { size: 4, current: 36, resistance: 4.61, reactance: 0.07, cores: '3C' as const },
+        { size: 6, current: 46, resistance: 3.08, reactance: 0.07, cores: '3C' as const },
+        { size: 10, current: 63, resistance: 1.83, reactance: 0.06, cores: '3C' as const },
+        { size: 16, current: 85, resistance: 1.15, reactance: 0.06, cores: '3C' as const },
+        { size: 25, current: 115, resistance: 0.727, reactance: 0.05, cores: '3C' as const },
+        { size: 35, current: 145, resistance: 0.524, reactance: 0.05, cores: '3C' as const },
+        { size: 50, current: 180, resistance: 0.387, reactance: 0.04, cores: '3C' as const },
+        { size: 70, current: 225, resistance: 0.268, reactance: 0.04, cores: '3C' as const },
+        { size: 95, current: 275, resistance: 0.193, reactance: 0.04, cores: '3C' as const },
+        { size: 120, current: 320, resistance: 0.153, reactance: 0.03, cores: '3C' as const },
+        { size: 150, current: 370, resistance: 0.124, reactance: 0.03, cores: '3C' as const },
+        { size: 185, current: 430, resistance: 0.0991, reactance: 0.03, cores: '3C' as const },
+        { size: 240, current: 530, resistance: 0.0754, reactance: 0.03, cores: '3C' as const },
+        { size: 300, current: 640, resistance: 0.0601, reactance: 0.02, cores: '3C' as const },
+        { size: 400, current: 780, resistance: 0.047, reactance: 0.02, cores: '3C' as const },
+        { size: 500, current: 920, resistance: 0.0366, reactance: 0.02, cores: '3C' as const }
+      ],
+      '4C': [
+        { size: 2.5, current: 20, resistance: 7.41, reactance: 0.08, cores: '4C' as const },
+        { size: 4, current: 27, resistance: 4.61, reactance: 0.08, cores: '4C' as const },
+        { size: 6, current: 36, resistance: 3.08, reactance: 0.07, cores: '4C' as const },
+        { size: 10, current: 50, resistance: 1.83, reactance: 0.07, cores: '4C' as const },
+        { size: 16, current: 68, resistance: 1.15, reactance: 0.06, cores: '4C' as const },
+        { size: 25, current: 92, resistance: 0.727, reactance: 0.06, cores: '4C' as const },
+        { size: 35, current: 116, resistance: 0.524, reactance: 0.05, cores: '4C' as const },
+        { size: 50, current: 145, resistance: 0.387, reactance: 0.05, cores: '4C' as const },
+        { size: 70, current: 180, resistance: 0.268, reactance: 0.04, cores: '4C' as const },
+        { size: 95, current: 220, resistance: 0.193, reactance: 0.04, cores: '4C' as const },
+        { size: 120, current: 256, resistance: 0.153, reactance: 0.04, cores: '4C' as const },
+        { size: 150, current: 296, resistance: 0.124, reactance: 0.03, cores: '4C' as const },
+        { size: 185, current: 344, resistance: 0.0991, reactance: 0.03, cores: '4C' as const },
+        { size: 240, current: 424, resistance: 0.0754, reactance: 0.03, cores: '4C' as const },
+        { size: 300, current: 512, resistance: 0.0601, reactance: 0.02, cores: '4C' as const },
+        { size: 400, current: 624, resistance: 0.047, reactance: 0.02, cores: '4C' as const }
+      ]
+    };
+    return KEC;
   };
+  
+  const defaultCatalogueAllCores = getKECCatalogue();
+  const catalogueSheets: Record<string, CableCatalogue[]> = Object.keys(catalogueData).length > 0 ? catalogueData : defaultCatalogueAllCores;
   const catalogueTabs = Object.keys(catalogueSheets);
-  const activeCatalogue = (catalogueSheets[activeCatalogueTab] as CableCatalogue[]) || defaultCatalogueWithCores;
+  const activeCatalogue = (catalogueSheets[activeCatalogueTab] as CableCatalogue[]) || defaultCatalogueAllCores['3C'];
+  const catalogueName = Object.keys(catalogueData).length > 0 ? 'User Uploaded Catalogue' : 'KEC Standard (IEC 60287)';
 
   return (
     <div className="space-y-6">
@@ -665,6 +761,34 @@ const SizingTab = () => {
           >
             <Download size={20} />
             Download Template
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Load Demo Data Section */}
+      <div className="bg-gradient-to-r from-amber-900/20 to-orange-900/20 rounded-lg p-6 border border-amber-700/50">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-2 flex items-center">
+              <Calculator className="mr-2" size={20} />
+              Quick Start with Demo Data
+            </h3>
+            <p className="text-slate-300 text-sm mb-4">
+              Load pre-configured demo feeders with realistic cable data across multiple panels. Perfect for testing the cable sizing engine and understanding the workflow.
+            </p>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-400">
+              <span className="bg-slate-700 px-2 py-1 rounded">44 Pre-configured Feeders</span>
+              <span className="bg-slate-700 px-2 py-1 rounded">4 Distribution Panels</span>
+              <span className="bg-slate-700 px-2 py-1 rounded">Auto Path Discovery</span>
+              <span className="bg-slate-700 px-2 py-1 rounded">Ready to Calculate</span>
+            </div>
+          </div>
+          <button
+            onClick={handleLoadDemoFeeders}
+            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-6 py-3 rounded-lg flex items-center gap-2 font-medium transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            <Loader2 className="mr-2" size={20} />
+            Load Demo Feeders
           </button>
         </div>
       </div>
@@ -930,7 +1054,10 @@ const SizingTab = () => {
       {/* Catalogue Preview */}
       <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Cable Catalogue</h3>
+          <div>
+            <h3 className="text-lg font-semibold text-white">Cable Catalogue</h3>
+            <p className="text-xs text-slate-400 mt-1">Source: {catalogueName}</p>
+          </div>
           <span className="text-sm text-slate-400">
             {activeCatalogue.length} cable sizes available
           </span>

@@ -139,8 +139,8 @@ class CableSizingEngine_V2 {
       // ========== STEP 2: Calculate Full Load Current (IEC formula) ==========
       result.fullLoadCurrent = this.calculateFLC();
       console.log(`[ENGINE] FLC calculated: ${result.fullLoadCurrent}A (P=${input.ratedPowerKW}kW, V=${input.voltage}V, PF=${input.powerFactor}, Eff=${input.efficiency})`);
-      if (result.fullLoadCurrent <= 0) {
-        throw new Error(`Invalid full load current: ${result.fullLoadCurrent}A`);
+      if (!Number.isFinite(result.fullLoadCurrent) || result.fullLoadCurrent <= 0) {
+        throw new Error(`Invalid full load current: ${result.fullLoadCurrent}A (Check voltage and power values)`);
       }
 
       // ========== STEP 3: Calculate Starting Current (motors only) ==========
