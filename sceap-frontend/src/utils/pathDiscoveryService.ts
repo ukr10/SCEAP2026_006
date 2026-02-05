@@ -346,7 +346,7 @@ export const discoverPathsToTransformer = (cables: CableSegment[]): CablePath[] 
 
   // Trace back each end-load to transformer
   for (const startCable of endLoadCables) {
-    const pathCables = traceBackToTransformer(startCable, allCables, normalizeBus, transformer);
+    const pathCables = traceBackToTransformer(startCable, cables, normalizeBus, transformer);
     
     if (pathCables && pathCables.length > 0) {
       const totalDistance = pathCables.reduce((sum, c) => sum + c.length, 0);
@@ -404,7 +404,6 @@ export const discoverPathsToTransformer = (cables: CableSegment[]): CablePath[] 
  */
 const traceBackToTransformer = (
   startCable: CableSegment,
-  busToFeeder: Map<string, CableSegment>,
   allCables: CableSegment[],
   normalizeBus: (b: string) => string,
   transformer: CableSegment
