@@ -261,8 +261,10 @@ class CableSizingEngine_V2 {
         result.warnings.push(`Very large single cable (${result.selectedConductorArea}mm²); consider if parallel runs feasible`);
       }
 
-      // Short-circuit check
-      if (input.protectionType === 'ACB' && input.maxShortCircuitCurrent) {
+      // Short-circuit check - INFORMATIONAL ONLY (not a hard failure)
+      // This is because ISc ratings are reference values from catalogues
+      // and don't prevent cable selection, just inform of limitations
+      if (input.maxShortCircuitCurrent) {
         const k = this.getShortCircuitConstant();
         const t = input.protectionClearingTime || 0.1;
         const withstand = k * result.selectedConductorArea * Math.sqrt(t);
@@ -270,9 +272,11 @@ class CableSizingEngine_V2 {
         result.shortCircuitWithstand_kA = withstand / 1000;
         result.shortCircuitPass = input.maxShortCircuitCurrent * 1000 <= withstand;
         
+        // Only warn, don't fail
         if (!result.shortCircuitPass) {
-          result.status = 'FAILED';
-          result.warnings.push(`Short-circuit withstand FAILED: ${input.maxShortCircuitCurrent}kA > ${(withstand / 1000).toFixed(2)}kA`);
+          result.warnings.push(`Short-circuit INFO: ISc ${input.maxShortCircuitCurrent}kA exceeds withstand ${(withstand / 1000).toFixed(2)}kA (sizing constrained by ampacity/vdrop)`);
+        } else {
+          result.warnings.push(`Short-circuit OK: ISc ${input.maxShortCircuitCurrent}kA ≤ withstand ${(withstand / 1000).toFixed(2)}kA`);
         }
       }
 

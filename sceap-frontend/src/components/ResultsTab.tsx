@@ -10,63 +10,93 @@ import { LoadTypeSpecs } from '../utils/CableEngineeringData';
 import { KEC_CATALOGUE } from '../utils/KEC_CableStandard';
 
 // Result type for display - maps engine output to UI fields
+// Extended with all professional columns from Excel template
 interface CableSizingResult {
-  // Original cable info
+  // Original cable info (Basic Identification)
   serialNo: number;
   cableNumber: string;
   feederDescription: string;
   fromBus: string;
   toBus: string;
-  loadKW: number;
+  
+  // Column Headers Group 1: Electrical Specifications
+  breakerType: string; // MCCB, ACB, MCB, etc.
+  feederType: string; // I=Incomer, F=Feeder, Motor
+  motorRating: number; // Motor load in kVA
   voltage: number;
-  length: number;
+  voltageKV: number; // Voltage in kV (e.g., 0.415)
+  voltageVariationFactor: number; // Usually 1.0
   powerFactor: number;
   efficiency: number;
-  deratingFactor: number;
-  deratingComponents?: {
-    K_temp: number;
-    K_group: number;
-    K_soil: number;
-    K_depth: number;
-  };
+  
+  // Column Headers Group 2: Conductor & Installation
+  ratedCurrent: number; // Rated current It (Amps)
+  conductorType: string; // Cu or Al
   conductorMaterial: 'Cu' | 'Al';
+  powerSupply: string; // 2-wire, 3-wire, 4-wire
+  installationMethod: string; // D=Duct, A=Air, T=Trench
+  motorStartingCurrent: number; // Motor starting current (Amps)
+  motorStartingPF: number; // Motor starting power factor
+  
+  // Column Headers Group 3: Cable Data
   numberOfCores: '1C' | '2C' | '3C' | '4C';
+  cableSize: number; // Cable size (mm²)
+  cableRating: number; // Cable current rating (Amps)
+  cableResistance_ohm_per_km: number;
   
-  // Load & current calculations
-  fullLoadCurrent: number;
+  // Column Headers Group 4: Derating Factors
+  deratingFactor: number; // Overall derating factor K
+  deratingComponents?: {
+    K_temp: number; // Ambient temperature
+    K_group: number; // Grouping/bundling factor
+    K_soil: number; // Soil factor
+    K_depth: number; // Depth factor
+    K_unbalance?: number; // Current unbalance factor
+  };
+  deratingAmbientTemp: number; // K_temp (40°C reference)
+  deratingGroupingFactor: number; // K_group (A2/A3/D6/D7)
+  deratingGroundTemp: number; // Ground temperature
+  deratingDepth: number; // Depth of laying (cm)
+  deratingThermalResistivity: number; // Thermal resistivity K·m/W (D4/D5)
+  deratingUnbalance: number; // Current unbalance factor
+  
+  // Column Headers Group 5: Current Calculations
+  fullLoadCurrent: number; // FLC or I_t
   startingCurrent?: number;
-  deratedCurrent: number;
-  cableResistance_ohm_per_km: number; // From catalogue for selected size (Ω/km)
+  deratedCurrent: number; // Derated current (FLC / K_total)
+  loadKW: number;
+  length: number;
+  routeLength: number; // Route length in meters
   
-  // Voltage drop values
+  // Column Headers Group 6: Cable Sizing Constraints
+  sizeByCurrent: number; // Size by ampacity
+  sizeByVoltageDrop_running: number; // Size by running V-drop
+  sizeByVoltageDrop_starting?: number; // Size by starting V-drop
+  sizeByShortCircuit: number; // Size by ISc
+  
+  // Column Headers Group 7: Selected Cable Configuration
+  suitableCableSize: number; // Final selected conductor area (mm²)
+  numberOfRuns: number; // Number of parallel runs
+  sizePerRun?: number; // Size per individual run
+  currentPerRun: number; // Current per run (Ir = It / N)
+  
+  // Column Headers Group 8: Voltage Drop Analysis
   voltageDrop_running_volt: number;
   voltageDrop_running_percent: number;
+  vdropRunningAllowable: number; // 5% for running
   voltageDrop_starting_volt?: number;
   voltageDrop_starting_percent?: number;
+  vdropStartingAllowable: number; // 15% for starting
   
-  // Cable size constraints
-  sizeByCurrent: number; // Size required by ampacity constraint (mm²)
-  sizeByVoltageDrop_running: number; // Size required by running V-drop (mm²)
-  sizeByVoltageDrop_starting?: number; // Size required by starting V-drop (mm²)
-  sizeByShortCircuit: number; // Size required by ISc (mm²)
-  
-  // Selected cable
-  suitableCableSize: number; // Final selected conductor area (mm²)
-  numberOfRuns: number; // Number of parallel runs (1, 2, or 3)
-  sizePerRun?: number; // If runs > 1, size per individual run
-  
-  // Cable identification
-  cableDesignation: string; // e.g., "3C × 70mm² Cu XLPE" or "2×(3C × 50mm²) Cu XLPE"
+  // Column Headers Group 9: Cable Identification
+  cableDesignation: string;
   drivingConstraint: 'Ampacity' | 'RunningVdrop' | 'StartingVdrop' | 'ISc';
   
-  // Catalog data
-  catalogRating: number; // Current rating from catalog at selected size (A)
-  
-  // ISc check
+  // Column Headers Group 10: ISc Check
   shortCircuitCurrent_kA?: number;
   shortCircuitWithstand_kA?: number;
   
-  // Status
+  // Status & Diagnostics
   status: 'APPROVED' | 'WARNING' | 'FAILED';
   anomalies?: string[];
   warnings?: string[];
@@ -196,52 +226,82 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
 
     // Map result to display format (using engine outputs directly - they are correct now)
     const result: CableSizingResult = {
+      // Basic cable identification
       serialNo: cable.serialNo,
       cableNumber: cable.cableNumber,
       feederDescription: cable.feederDescription,
       fromBus: cable.fromBus,
       toBus: cable.toBus,
+      
+      // Electrical specifications
+      breakerType: cable.breakerType || 'MCCB',
+      feederType: cable.loadType || 'F',
+      motorRating: cable.loadKW || 0,
       voltage: cable.voltage,
-      length: cable.length || 0,
-      loadKW: cable.loadKW || 0,
+      voltageKV: (cable.voltage / 1000) || 0.415,
+      voltageVariationFactor: 1.0,
       powerFactor: engineInput.powerFactor || 0.85,
       efficiency: engineInput.efficiency || 0.95,
-      deratingFactor: engineResult.deratingFactor || 0.87,
-      deratingComponents: engineResult.deratingComponents,
-      conductorMaterial: engineInput.conductorMaterial as 'Cu' | 'Al',
-      numberOfCores: engineInput.numberOfCores,
       
-      // Load & current
-      fullLoadCurrent: engineResult.fullLoadCurrent || 0,
-      startingCurrent: engineResult.startingCurrent || 0,
-      deratedCurrent: engineResult.effectiveCurrentAtRun || 0, // This is I_FL / K_total (required rating)
+      // Conductor & installation
+      ratedCurrent: engineResult.fullLoadCurrent || 0,
+      conductorType: engineInput.conductorMaterial === 'Cu' ? 'Cu' : 'Al',
+      conductorMaterial: engineInput.conductorMaterial as 'Cu' | 'Al',
+      powerSupply: '3-phase', // Derived from numberOfCores
+      installationMethod: engineInput.installationMethod || 'Air',
+      motorStartingCurrent: engineResult.startingCurrent || 0,
+      motorStartingPF: 0.4,
+      
+      // Cable data
+      numberOfCores: engineInput.numberOfCores,
+      cableSize: engineResult.selectedConductorArea || 0,
+      cableRating: engineResult.catalogRatingPerRun || 0,
       cableResistance_ohm_per_km: cableResistance,
       
-      // Voltage drop
-      voltageDrop_running_volt: engineResult.voltageDropRunning_volt || 0,
-      voltageDrop_running_percent: (engineResult.voltageDropRunning_percent || 0) * 100, // Convert to percentage
-      voltageDrop_starting_volt: engineResult.voltageDropStarting_volt || 0,
-      voltageDrop_starting_percent: (engineResult.voltageDropStarting_percent || 0) * 100,
+      // Derating factors
+      deratingFactor: engineResult.deratingFactor || 0.87,
+      deratingComponents: engineResult.deratingComponents,
+      deratingAmbientTemp: engineResult.deratingComponents?.K_temp || 1.0,
+      deratingGroupingFactor: engineResult.deratingComponents?.K_group || 1.0,
+      deratingGroundTemp: cable.ambientTemp || 20,
+      deratingDepth: 75, // Default 75cm
+      deratingThermalResistivity: engineResult.deratingComponents?.K_soil || 1.0,
+      deratingUnbalance: engineResult.deratingComponents?.K_depth || 1.0,
       
-      // Cable size by constraints
+      // Current calculations
+      fullLoadCurrent: engineResult.fullLoadCurrent || 0,
+      startingCurrent: engineResult.startingCurrent || 0,
+      deratedCurrent: engineResult.effectiveCurrentAtRun || 0,
+      loadKW: cable.loadKW || 0,
+      length: cable.length || 0,
+      routeLength: cable.length || 0,
+      
+      // Cable sizing constraints
       sizeByCurrent: engineResult.sizeByAmpacity || 0,
       sizeByVoltageDrop_running: engineResult.sizeByRunningVdrop || 0,
       sizeByVoltageDrop_starting: engineResult.sizeByStartingVdrop || 0,
       sizeByShortCircuit: engineResult.sizeByISc || 0,
       
-      // Selected cable
+      // Selected cable configuration
       suitableCableSize: engineResult.selectedConductorArea || 0,
       numberOfRuns: engineResult.numberOfRuns || 1,
       sizePerRun: engineResult.sizePerRun || engineResult.selectedConductorArea,
+      currentPerRun: (engineResult.fullLoadCurrent || 0) / (engineResult.numberOfRuns || 1),
       
-      // Identification
+      // Voltage drop analysis
+      voltageDrop_running_volt: engineResult.voltageDropRunning_volt || 0,
+      voltageDrop_running_percent: (engineResult.voltageDropRunning_percent || 0) * 100,
+      vdropRunningAllowable: 5.0, // 5% for running
+      voltageDrop_starting_volt: engineResult.voltageDropStarting_volt || 0,
+      voltageDrop_starting_percent: (engineResult.voltageDropStarting_percent || 0) * 100,
+      vdropStartingAllowable: 15.0, // 15% for starting
+      
+      // Cable identification & ISc
       cableDesignation: engineResult.cableDesignation || '',
       drivingConstraint: (engineResult.drivingConstraint || 'Ampacity') as any,
-      catalogRating: engineResult.catalogRatingPerRun || 0,
-      
-      // ISc
       shortCircuitCurrent_kA: engineResult.shortCircuitIsc_kA,
       shortCircuitWithstand_kA: engineResult.shortCircuitWithstand_kA,
+      catalogRating: engineResult.catalogRatingPerRun || 0,
       
       // Status
       status: engineResult.status,
@@ -270,27 +330,57 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
       feederDescription: cable.feederDescription,
       fromBus: cable.fromBus,
       toBus: cable.toBus,
+      breakerType: cable.breakerType || 'MCCB',
+      feederType: cable.loadType || 'F',
+      motorRating: cable.loadKW || 0,
       voltage: cable.voltage,
-      length: cable.length || 0,
-      loadKW: cable.loadKW || 0,
+      voltageKV: (cable.voltage / 1000) || 0.415,
+      voltageVariationFactor: 1.0,
       powerFactor: 0.85,
       efficiency: 0.95,
+      ratedCurrent: 0,
+      conductorType: cable.conductorMaterial === 'Cu' ? 'Cu' : 'Al',
+      conductorMaterial: cable.conductorMaterial || 'Cu',
+      powerSupply: '3-phase',
+      installationMethod: cable.installationMethod || 'Air',
+      motorStartingCurrent: 0,
+      motorStartingPF: 0.4,
+      numberOfCores: '3C',
+      cableSize: 0,
+      cableRating: 0,
+      cableResistance_ohm_per_km: 0,
       deratingFactor: 0.87,
       deratingComponents: { K_temp: 1, K_group: 1, K_soil: 1, K_depth: 1 },
-      conductorMaterial: cable.conductorMaterial || 'Cu',
-      numberOfCores: '3C',
+      deratingAmbientTemp: 1.0,
+      deratingGroupingFactor: 1.0,
+      deratingGroundTemp: 20,
+      deratingDepth: 75,
+      deratingThermalResistivity: 1.0,
+      deratingUnbalance: 1.0,
       fullLoadCurrent: 0,
+      startingCurrent: 0,
       deratedCurrent: 0,
-      cableResistance_ohm_per_km: 0,
-      voltageDrop_running_volt: 0,
-      voltageDrop_running_percent: 0,
-      sizeByVoltageDrop_running: 0,
-      sizeByShortCircuit: 0,
+      loadKW: cable.loadKW || 0,
+      length: cable.length || 0,
+      routeLength: cable.length || 0,
       sizeByCurrent: 0,
+      sizeByVoltageDrop_running: 0,
+      sizeByVoltageDrop_starting: 0,
+      sizeByShortCircuit: 0,
       suitableCableSize: 0,
       numberOfRuns: 1,
+      sizePerRun: 0,
+      currentPerRun: 0,
+      voltageDrop_running_volt: 0,
+      voltageDrop_running_percent: 0,
+      vdropRunningAllowable: 5.0,
+      voltageDrop_starting_volt: 0,
+      voltageDrop_starting_percent: 0,
+      vdropStartingAllowable: 15.0,
       cableDesignation: 'ERROR',
       drivingConstraint: 'Ampacity',
+      shortCircuitCurrent_kA: 0,
+      shortCircuitWithstand_kA: 0,
       catalogRating: 0,
       status: 'FAILED',
       anomalies: [
@@ -310,60 +400,78 @@ const ResultsTab = () => {
     try {
       const raw = localStorage.getItem('results_visible_columns');
       return raw ? JSON.parse(raw) : {
-        // Identity columns
+        // GROUP 1: Serial Number & Cable Identification (Always shown)
         serialNo: true,
         cableNumber: true,
         feederDescription: true,
         fromBus: true,
         toBus: true,
         
-        // Load & Rating
-        breaker: true,
+        // GROUP 2: Feeder & Electrical Specifications
+        breakerType: true,
         feederType: true,
-        load: true,
-        quantity: true,
+        motorRating: true,
         voltage: true,
+        voltageKV: true,
+        voltageVariationFactor: false,
         powerFactor: true,
         efficiency: true,
         
-        // Conductor & Installation
+        // GROUP 3: Conductor & Installation Details
+        ratedCurrent: true,
         conductorType: true,
         powerSupply: true,
         installationMethod: true,
         motorStartingCurrent: true,
         motorStartingPF: true,
         
-        // Cable Data
+        // GROUP 4: Cable Data
         numberOfCores: true,
         cableSize: true,
         cableRating: true,
         
-        // Derating Factors
+        // GROUP 5: Derating Factors (Individual subfactors)
         deratingAmbientTemp: true,
-        deratingGrouping: true,
-        deratingGroundTemp: true,
-        deratingDepth: true,
+        deratingGroupingFactor: true,
+        deratingGroundTemp: false,
+        deratingDepth: false,
         deratingThermalResistivity: true,
-        deratingUnbalance: true,
-        deratingTotal: true,
+        deratingUnbalance: false,
+        deratingFactor: true,
         
-        // Current Carrying
-        deredCurrent: true,
-        comparison: true,
+        // GROUP 6: Current Carrying Capacity
+        fullLoadCurrent: true,
+        deratedCurrent: true,
+        catalogRating: true,
         
-        // Voltage Drop
-        vdropRunning: true,
-        vdropRunningPercent: true,
-        vdropAllowable: true,
-        vdropStarting: true,
-        vdropStartingPercent: true,
-        vdropStartingAllowable: true,
+        // GROUP 7: Cable Routing
+        routeLength: true,
+        loadKW: true,
+        cableDesignation: true,
         
-        // Final sizing
+        // GROUP 8: Sizing Constraints (Why size was chosen)
+        sizeByCurrent: true,
+        sizeByVoltageDrop_running: true,
+        sizeByVoltageDrop_starting: false,
+        sizeByShortCircuit: false,
+        drivingConstraint: true,
+        
+        // GROUP 9: Voltage Drop Analysis
+        voltageDrop_running_volt: true,
+        voltageDrop_running_percent: true,
+        vdropRunningAllowable: true,
+        voltageDrop_starting_volt: false,
+        voltageDrop_starting_percent: false,
+        vdropStartingAllowable: false,
+        
+        // GROUP 10: Final Cable Selection
+        suitableCableSize: true,
         numberOfRuns: true,
         currentPerRun: true,
-        routeLength: true,
-        designation: true,
+        shortCircuitCurrent_kA: true,
+        shortCircuitWithstand_kA: true,
+        
+        // STATUS
         status: true,
       };
     } catch {
@@ -373,13 +481,14 @@ const ResultsTab = () => {
         feederDescription: true,
         fromBus: true,
         toBus: true,
-        breaker: true,
+        breakerType: true,
         feederType: true,
-        load: true,
-        quantity: true,
+        motorRating: true,
         voltage: true,
+        voltageKV: true,
         powerFactor: true,
         efficiency: true,
+        ratedCurrent: true,
         conductorType: true,
         powerSupply: true,
         installationMethod: true,
@@ -388,6 +497,28 @@ const ResultsTab = () => {
         numberOfCores: true,
         cableSize: true,
         cableRating: true,
+        deratingAmbientTemp: true,
+        deratingGroupingFactor: true,
+        deratingFactor: true,
+        fullLoadCurrent: true,
+        deratedCurrent: true,
+        catalogRating: true,
+        routeLength: true,
+        loadKW: true,
+        cableDesignation: true,
+        sizeByCurrent: true,
+        sizeByVoltageDrop_running: true,
+        drivingConstraint: true,
+        voltageDrop_running_volt: true,
+        voltageDrop_running_percent: true,
+        vdropRunningAllowable: true,
+        suitableCableSize: true,
+        numberOfRuns: true,
+        currentPerRun: true,
+        shortCircuitCurrent_kA: true,
+        shortCircuitWithstand_kA: true,
+        status: true,
+      };
         deratingAmbientTemp: true,
         deratingGrouping: true,
         deratingGroundTemp: true,
