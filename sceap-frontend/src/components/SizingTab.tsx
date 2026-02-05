@@ -285,29 +285,6 @@ const SizingTab = () => {
   const [rawExcelRows, setRawExcelRows] = useState<any[]>([]);
   const [columnMappings, setColumnMappings] = useState<Record<string, string | null>>({});
 
-  // Default cable catalogue
-  const defaultCatalogue: CableCatalogue[] = [
-    { size: 1.5, current: 20, resistance: 12.1, reactance: 0.08 },
-    { size: 2.5, current: 27, resistance: 7.41, reactance: 0.08 },
-    { size: 4, current: 36, resistance: 4.61, reactance: 0.07 },
-    { size: 6, current: 46, resistance: 3.08, reactance: 0.07 },
-    { size: 10, current: 63, resistance: 1.83, reactance: 0.06 },
-    { size: 16, current: 85, resistance: 1.15, reactance: 0.06 },
-    { size: 25, current: 115, resistance: 0.727, reactance: 0.05 },
-    { size: 35, current: 145, resistance: 0.524, reactance: 0.05 },
-    { size: 50, current: 180, resistance: 0.387, reactance: 0.04 },
-    { size: 70, current: 225, resistance: 0.268, reactance: 0.04 },
-    { size: 95, current: 275, resistance: 0.193, reactance: 0.04 },
-    { size: 120, current: 320, resistance: 0.153, reactance: 0.03 },
-    { size: 150, current: 370, resistance: 0.124, reactance: 0.03 },
-    { size: 185, current: 430, resistance: 0.0991, reactance: 0.03 },
-    { size: 240, current: 530, resistance: 0.0754, reactance: 0.03 },
-    { size: 300, current: 640, resistance: 0.0601, reactance: 0.02 },
-    { size: 400, current: 780, resistance: 0.0470, reactance: 0.02 },
-    { size: 500, current: 920, resistance: 0.0366, reactance: 0.02 },
-    { size: 630, current: 1100, resistance: 0.0283, reactance: 0.02 }
-  ];
-
   // Load demo data directly - use CLEAN demo data with proper values
   const handleLoadDemoFeeders = useCallback(() => {
     const demoFeeders = CLEAN_DEMO_FEEDERS;

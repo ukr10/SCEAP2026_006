@@ -1,10 +1,10 @@
-import { TrendingUp, Cable, AlertTriangle, CheckCircle } from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
 
 interface KPICardProps {
   title: string;
   value: string;
   change: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: LucideIcon;
   color: string;
 }
 
@@ -19,7 +19,7 @@ const KPICard = ({ title, value, change, icon: Icon, color }: KPICardProps) => (
         </p>
       </div>
       <div className={`p-3 rounded-lg ${color}`}>
-        <Icon size={24} className="text-white" />
+        <Icon size={24} />
       </div>
     </div>
   </div>
