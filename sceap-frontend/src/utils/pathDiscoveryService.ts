@@ -252,7 +252,9 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
           return Number.isFinite(n) ? n : undefined;
         })(),
         // NEW: Protection type determines if ISc check is applied (ISc only for ACB)
-        protectionType: (getString(getColumnValue(feeder, 'protectionType', 'Breaker Type', 'Protection Type', 'Breaker', 'breaker type', 'protection'), 'None')) as 'ACB' | 'MCCB' | 'MCB' | 'None'
+        protectionType: (getString(getColumnValue(feeder, 'protectionType', 'Breaker Type', 'Protection Type', 'Breaker', 'breaker type', 'protection'), 'None')) as 'ACB' | 'MCCB' | 'MCB' | 'None',
+        // Alias for protectionType (display name for Results table)
+        breakerType: getString(getColumnValue(feeder, 'breakerType', 'Protection Type', 'Breaker Type', 'Breaker', 'breaker type', 'protection'), 'MCCB')
       };
     });
 };

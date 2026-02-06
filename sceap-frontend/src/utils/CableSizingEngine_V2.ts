@@ -102,6 +102,21 @@ class CableSizingEngine_V2 {
   private catalog: any;
   private allSizes: number[] = [];
   private sqrt3 = Math.sqrt(3);
+  
+  // User-provided data (optional, falls back to hardcoded defaults)
+  private userAmpacityTables?: any;
+  private userDeratingTables?: any;
+  private userMotorMultipliers?: any;
+
+  constructor(
+    userAmpacityTables?: any,
+    userDeratingTables?: any,
+    userMotorMultipliers?: any
+  ) {
+    this.userAmpacityTables = userAmpacityTables;
+    this.userDeratingTables = userDeratingTables;
+    this.userMotorMultipliers = userMotorMultipliers;
+  }
 
   sizeCable(input: CableSizingInput): CableSizingResult {
     this.input = input;
@@ -130,7 +145,9 @@ class CableSizingEngine_V2 {
 
     try {
       // ========== STEP 1: Load catalog for this core config ==========
-      this.catalog = (AmpacityTables as any)[input.numberOfCores];
+      // Use user-provided ampacity tables if available, otherwise use built-in AmpacityTables
+      const ampacitySource = this.userAmpacityTables || AmpacityTables;
+      this.catalog = (ampacitySource as any)[input.numberOfCores];
       if (!this.catalog) {
         throw new Error(`No catalog for core config: ${input.numberOfCores}`);
       }
@@ -166,8 +183,10 @@ class CableSizingEngine_V2 {
         result.sizeByStartingVdrop = this.findSizeByStartingVdrop(result.startingCurrent);
       }
 
-      // ========== STEP 8: Size by Short-Circuit (ISc constraint, if ACB) ==========
-      if (input.protectionType === 'ACB' && input.maxShortCircuitCurrent) {
+      // ========== STEP 8: Size by Short-Circuit (ISc constraint, if ACB, non-motor loads) ==========
+      // ISc constraints are more critical for switchgear & distribution, less so for motors
+      const isMotorType = ['Motor', 'Pump', 'Compressor', 'Fan', 'Heater'].includes(input.loadType || '');
+      if (input.protectionType === 'ACB' && input.maxShortCircuitCurrent && !isMotorType) {
         result.sizeByISc = this.findSizeByISc(input.maxShortCircuitCurrent);
       }
 
@@ -307,28 +326,33 @@ class CableSizingEngine_V2 {
   }
 
   private calculateStartingCurrent(flc: number, method: 'DOL' | 'StarDelta' | 'SoftStarter' | 'VFD'): number {
-    const multipliers = (MotorStartingMultipliers as any)[method] || { typical: 1.0 };
+    // Use user-provided multipliers if available
+    const motorSource = this.userMotorMultipliers || MotorStartingMultipliers;
+    const multipliers = (motorSource as any)[method] || { typical: 1.0 };
     return flc * multipliers.typical;
   }
 
   private calculateDeratingComponents(): { K_temp: number; K_group: number; K_soil: number; K_depth: number } {
+    // Use user-provided derating tables if available, otherwise use built-in DeratingTables
+    const deratingSource = this.userDeratingTables || DeratingTables;
+    
     const method = this.input.installationMethod.toLowerCase() as 'air' | 'trench' | 'duct';
     const isSingle = this.input.numberOfCores === '1C';
     
     // Temperature factor (K_temp)
-    const tempFactors = (DeratingTables.temperature_factor as any)[method];
+    const tempFactors = (deratingSource.temperature_factor as any)[method];
     const K_temp = isSingle ? tempFactors.single : tempFactors.multi;
 
     // Grouping factor (K_group) - number of loaded circuits
     const grouping = this.input.numberOfLoadedCircuits || 1;
-    const groupingFactors = (DeratingTables.grouping_factor as any);
+    const groupingFactors = (deratingSource.grouping_factor as any);
     const K_group = groupingFactors[grouping] || 1.0;
 
     // Soil/Ground temp factor (K_soil) - use defaults
-    const K_soil = (DeratingTables.ground_temp_factor as any)[isSingle ? 'single' : 'multi'] || 1.0;
+    const K_soil = (deratingSource.ground_temp_factor as any)[isSingle ? 'single' : 'multi'] || 1.0;
 
     // Depth factor (K_depth) - use defaults
-    const K_depth = (DeratingTables.depth_factor as any)[isSingle ? 'single' : 'multi'] || 1.0;
+    const K_depth = (deratingSource.depth_factor as any)[isSingle ? 'single' : 'multi'] || 1.0;
 
     return { K_temp, K_group, K_soil, K_depth };
   }

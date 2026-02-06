@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Download, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import { Download, FileText, AlertCircle, CheckCircle, Edit2, Save, RotateCcw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -8,14 +8,68 @@ import { CableSegment } from '../utils/pathDiscoveryService';
 import CableSizingEngine_V2, { CableSizingInput as CableSizingInputV2 } from '../utils/CableSizingEngine_V2';
 import { LoadTypeSpecs } from '../utils/CableEngineeringData';
 import { KEC_CATALOGUE } from '../utils/KEC_CableStandard';
-import { EXCEL_FORMULA_MAPPINGS } from '../utils/ExcelFormulaMappings';
+import { FormulaCalculator, EditableCell } from '../utils/FormulaCalculator';
 
-// Helper to get a short, human-readable formula text for a mapping id
-const getFormulaText = (id: number): string => {
-  const f = EXCEL_FORMULA_MAPPINGS.find((m) => m.id === id);
-  if (!f) return '';
-  const raw = (f.implementation || f.excelFormula || '').toString();
-  return raw.replace(/\s+/g, ' ').trim().slice(0, 220);
+// Comprehensive column-to-formula ID mapping (verified from Excel template)
+// This map documents which Excel formula IDs correspond to each column in the results table.
+// Used for Task 5 verification and reference in development/debugging.
+// @see EXCEL_FORMULA_MAPPINGS for full formula definitions
+const COLUMN_FORMULA_MAP: Record<string, number | null> = {
+  // Electrical Specifications
+  ratedCurrent: 1,
+  motorStartingCurrent: 2,
+  motorStartingPF: 3,
+  cableRating: 4,
+  // Derating Factors
+  deratingAmbientTemp: 5,
+  deratingGroupingFactor: 6,
+  deratingGroundTemp: 7,
+  deratingDepth: 8,
+  deratingThermalResistivity: 9,
+  deratingFactor: 10,
+  deratedCurrent: 11,
+  // Validation
+  ampacityCheck: 12,
+  // Voltage Drop Running
+  voltageDrop_running_volt: 13,
+  voltageDrop_running_percent: 14,
+  vdropRunningAllowable: 15,
+  // Motor Starting
+  voltageDrop_starting_volt: 16,
+  voltageDrop_starting_percent: 17,
+  vdropStartingAllowable: 18,
+  // Cable Configuration
+  numberOfRuns: 20,
+  currentPerRun: 21,
+  // Cable Sizing
+  sizeByCurrent: 22,
+  deredCapacity: 23,
+  suitableCableSize: 24,
+  // Short Circuit
+  shortCircuitCurrent_kA: 25,
+};
+// Reference this to suppress unused variable warning while preserving documentation
+void COLUMN_FORMULA_MAP;
+
+// Electrical Formula Snippets for Column Headers
+const ELECTRICAL_FORMULAS: Record<string, string> = {
+  ratedCurrent: 'I = P/(V×√3×PF×η)',
+  motorStartingCurrent: 'I_start = 6 × I',
+  motorStartingPF: 'PF_start = 0.2',
+  deratingFactorTemp: 'K_t = f(T°C)',
+  deratingFactorGrouping: 'K_g = f(N_circuits)',
+  deratingFactorDepth: 'K_d = f(depth)',
+  deratingFactorSoil: 'K_s = f(ρ_soil)',
+  deratingFactorTotal: 'K = K_t × K_g × K_d × K_s',
+  deratedCurrent: 'I_rating = I / K',
+  voltageDrop_running_volt: 'ΔU = √3×I×L×(R.cosφ+X.sinφ)/1000',
+  voltageDrop_running_percent: 'ΔU% = (ΔU/V)×100',
+  voltageDrop_starting_volt: 'ΔU_start = √3×I_start×L×(R.cosφ+X.sinφ)/1000',
+  voltageDrop_starting_percent: 'ΔU_start% = (ΔU_start/V)×100',
+  numberOfRuns: 'N = ⌈I_rating/I_cable⌉',
+  sizeByAmpacity: 'Size = min(s: I_cable≥I_rating)',
+  selectedSize: 'Size_final = MAX(ampacity, vdrop, ISc)',
+  shortCircuitCurrent_kA: 'I_sc = V_fault/Z_total',
 };
 
 // Result type for display - maps engine output to UI fields
@@ -168,7 +222,7 @@ const detectAnomalies = (
  * Uses CableSizingEngine with IEC 60287/60364 compliance
  * Handles all load types with proper environmental derating
  */
-const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
+const calculateCableSizing = (cable: CableSegment, userAmpacityTables?: any): CableSizingResult => {
   try {
     // Prepare input for industrial engine
     const loadType = (cable.loadType || 'Motor') as keyof typeof LoadTypeSpecs;
@@ -194,6 +248,15 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
       console.error(`[ERROR] Missing/invalid loadKW for ${cable.cableNumber}:`, cable.loadKW);
       throw new Error(`Invalid loadKW: ${cable.loadKW}`);
     }
+    // Determine protection clearing time based on breaker type
+    // ACB: 0.5-2.0s (typical 1.0s), MCCB: 0.1-0.5s (typical 0.3s), MCB: 0.03-0.1s (typical 0.05s), DC: 0.1s
+    const protectionType = cable.protectionType || cable.breakerType || 'None';
+    let defaultClearingTime = 2.0; // Conservative default (seconds)
+    if (protectionType === 'MCB') defaultClearingTime = 0.05;
+    else if (protectionType === 'MCCB') defaultClearingTime = 0.3;
+    else if (protectionType === 'ACB') defaultClearingTime = 1.0;
+    else if (protectionType === 'DC') defaultClearingTime = 0.1;
+
     const engineInput: CableSizingInputV2 = {
       loadType,
       ratedPowerKW: cable.loadKW || 0.1,
@@ -213,13 +276,15 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
       startingMethod: cable.startingMethod || 'DOL',
       protectionType: cable.protectionType || 'None',
       maxShortCircuitCurrent: cable.maxShortCircuitCurrent,
-      protectionClearingTime: cable.protectionClearingTime || 0.1
+      protectionClearingTime: cable.protectionClearingTime || defaultClearingTime
     };
 
     console.log(`[ENGINE INPUT] for ${cable.cableNumber}:`, engineInput);
 
     // Run EPC-grade sizing engine (V3 logic in V2)
-    const engine = new CableSizingEngine_V2();
+    // Prefer explicit user tables passed as parameter, otherwise fall back to global hook
+    const ampacitySource = userAmpacityTables || (window as any).__USER_AMPACITY_TABLES__;
+    const engine = new CableSizingEngine_V2(ampacitySource);
     const engineResult = engine.sizeCable(engineInput);
 
     console.log(`[ENGINE OUTPUT] for ${cable.cableNumber}:`, {
@@ -409,7 +474,7 @@ const calculateCableSizing = (cable: CableSegment): CableSizingResult => {
 };
 
 const ResultsTab = () => {
-  const { normalizedFeeders, pathAnalysis } = usePathContext();
+  const { normalizedFeeders, pathAnalysis, catalogueData } = usePathContext();
   const [results, setResults] = useState<CableSizingResult[]>([]);
   const [dedupeReport, setDedupeReport] = useState<{ count: number; sample: any[] }>({ count: 0, sample: [] });
   const [showCustomize, setShowCustomize] = useState(false);
@@ -543,6 +608,159 @@ const ResultsTab = () => {
     }
   });
 
+  const [editingRow, setEditingRow] = useState<string | null>(null); // Deprecated: kept for compatibility
+  const [editedValues, setEditedValues] = useState<Record<string, any>>({}); // Deprecated: kept for compatibility
+  void editingRow; // Suppress unused variable warning
+  void setEditingRow;
+  void editedValues;
+  void setEditedValues;
+  const { updateFeeder, revertToOriginal } = usePathContext();
+
+  // NEW: Global edit mode - all cells become editable simultaneously
+  const [globalEditMode, setGlobalEditMode] = useState(false);
+  const [editableCells, setEditableCells] = useState<Record<string, EditableCell>>({});
+  const formulaCalculator = new FormulaCalculator();
+
+  // Initialize editable cells when results change
+  useEffect(() => {
+    if (results.length > 0 && !globalEditMode) {
+      const cells: Record<string, EditableCell> = {};
+      results.forEach((r) => {
+        cells[r.cableNumber] = {
+          loadKW: r.loadKW,
+          voltage: r.voltage,
+          length: r.length,
+          powerFactor: r.powerFactor,
+          efficiency: r.efficiency,
+          phase: '3Ø',
+          numberOfCores: r.numberOfCores as '1C' | '2C' | '3C' | '4C',
+          installationMethod: r.installationMethod as 'Air' | 'Trench' | 'Duct',
+          ambientTemp: 40,
+          numberOfLoadedCircuits: 1,
+          breakerType: (r as any).breakerType || 'MCCB',
+          breakerSize: (r as any).motorRating || r.loadKW,
+          feederType: (r as any).feederType || 'Pump',
+          ratedCurrent: r.fullLoadCurrent,
+          motorStartingCurrent: r.motorStartingCurrent,
+          motorStartingPF: r.motorStartingPF,
+          cableRating: r.cableRating,
+          deratingFactorTemp: r.deratingComponents?.K_temp || 1,
+          deratingFactorGrouping: r.deratingComponents?.K_group || 1,
+          deratingFactorDepth: r.deratingComponents?.K_depth || 1,
+          deratingFactorSoil: r.deratingComponents?.K_soil || 1,
+          deratingFactorTotal: r.deratingFactor,
+          deratedCurrent: r.deratedCurrent,
+          sizeByAmpacity: r.sizeByCurrent,
+          sizeByVdropRunning: r.sizeByVoltageDrop_running,
+          sizeByVdropStarting: r.sizeByVoltageDrop_starting || 0,
+          sizeByISc: r.sizeByShortCircuit,
+          selectedSize: r.suitableCableSize,
+          numberOfRuns: r.numberOfRuns,
+          voltageDrop_running_V: r.voltageDrop_running_volt,
+          voltageDrop_running_percent: r.voltageDrop_running_percent,
+          voltageDrop_starting_V: r.voltageDrop_starting_volt || 0,
+          voltageDrop_starting_percent: r.voltageDrop_starting_percent || 0,
+        };
+      });
+      setEditableCells(cells);
+    }
+  }, [results, globalEditMode]);
+
+  // Handle cell value change in edit mode
+  const handleCellChange = (cableNumber: string, field: string, value: any) => {
+    const cell = editableCells[cableNumber];
+    if (!cell) return;
+
+    // Update the cell value
+    const updatedCell = { ...cell, [field]: parseFloat(value) || value };
+
+    // Perform cascading recalculation
+    const recalculated = formulaCalculator.calculateCascade(updatedCell, field);
+
+    // Update state with cascading changes
+    setEditableCells((prev) => ({
+      ...prev,
+      [cableNumber]: recalculated,
+    }));
+  };
+
+  // Save all edits and persist globally
+  const handleSaveAllEdits = () => {
+    let changed = 0;
+    for (const [cableNumber, editedCell] of Object.entries(editableCells)) {
+      const original = results.find((r) => r.cableNumber === cableNumber);
+      if (original && updateFeeder) {
+        // Create updated cable segment with all edited fields
+        const updatedCable: Partial<CableSegment> = {
+          loadKW: Number(editedCell.loadKW) || original.loadKW,
+          length: Number(editedCell.length) || original.length,
+          powerFactor: Number(editedCell.powerFactor) || original.powerFactor,
+          efficiency: Number(editedCell.efficiency) || original.efficiency,
+          numberOfCores: editedCell.numberOfCores || original.numberOfCores,
+          installationMethod: editedCell.installationMethod || original.installationMethod,
+          ambientTemp: Number(editedCell.ambientTemp) || 40,
+          numberOfLoadedCircuits: Number(editedCell.numberOfLoadedCircuits) || 1,
+          breakerType: editedCell.breakerType || 'MCCB',
+          loadType: (editedCell.feederType || 'Pump') as any,
+        };
+        
+        // Save changes to global context
+        updateFeeder(cableNumber, updatedCable);
+        changed++;
+      }
+    }
+    setGlobalEditMode(false);
+    alert(`Saved ${changed} cables. Recalculating sizing...`);
+  };
+
+  // Revert all edits
+  const handleRevertAll = () => {
+    if (window.confirm('Revert all edits to original data?')) {
+      revertToOriginal?.();
+      setGlobalEditMode(false);
+      setResults([]);
+    }
+  };
+
+  // Export current editable cells to Excel
+  const handleDownloadEdited = () => {
+    if (!results || results.length === 0) {
+      alert('No results to download');
+      return;
+    }
+
+    const exportData = results.map((r) => {
+      const editedCell = editableCells[r.cableNumber];
+      return {
+        'Serial No': r.serialNo,
+        'Cable Number': r.cableNumber,
+        'Feeder Description': r.feederDescription,
+        'From Bus': r.fromBus,
+        'To Bus': r.toBus,
+        'Voltage (V)': r.voltage,
+        'Load (kW)': (editedCell?.loadKW || r.loadKW).toFixed(2),
+        'Length (m)': (editedCell?.length || r.length).toFixed(2),
+        'PF': (editedCell?.powerFactor || r.powerFactor).toFixed(2),
+        'Efficiency (%)': ((editedCell?.efficiency || r.efficiency) * 100).toFixed(1),
+        'Number of Cores': editedCell?.numberOfCores || r.numberOfCores,
+        'Installation Method': editedCell?.installationMethod || r.installationMethod,
+        'FLC (A)': (editedCell?.ratedCurrent || r.fullLoadCurrent).toFixed(2),
+        'Derated Current (A)': (editedCell?.deratedCurrent || r.deratedCurrent).toFixed(2),
+        'Derating K_total': (editedCell?.deratingFactorTotal || r.deratingFactor).toFixed(3),
+        'Running V-Drop (V)': (editedCell?.voltageDrop_running_V || r.voltageDrop_running_volt).toFixed(2),
+        'Running V-Drop (%)': (editedCell?.voltageDrop_running_percent || r.voltageDrop_running_percent).toFixed(2),
+        'Selected Cable Size (mm²)': editedCell?.selectedSize || r.suitableCableSize,
+        'Number of Runs': editedCell?.numberOfRuns || r.numberOfRuns,
+        'Status': r.status.toUpperCase(),
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Edited Results');
+    XLSX.writeFile(workbook, `cable_sizing_edited_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   useEffect(() => {
     localStorage.setItem('results_visible_columns', JSON.stringify(visibleColumns));
   }, [visibleColumns]);
@@ -578,7 +796,7 @@ const ResultsTab = () => {
     const allCables: CableSizingResult[] = uniqueFeeders
       .sort((a, b) => a.serialNo - b.serialNo)
       .map((cable) => {
-        const result = calculateCableSizing(cable);
+        const result = calculateCableSizing(cable, catalogueData);
         const issues = detectAnomalies(cable, result);
         result.anomalies = issues;
         result.isAnomaly = issues.length > 0;
@@ -825,6 +1043,69 @@ const ResultsTab = () => {
   };
 
   const validResults = results.filter((r) => r.status === 'APPROVED').length;
+
+  // Helper to get display value - from editableCells if edit mode, else from result
+  const getValue = (cableNumber: string, fieldName: string, originalValue: any): any => {
+    if (!globalEditMode) return originalValue;
+    const cell = editableCells[cableNumber];
+    return cell ? (cell[fieldName as keyof EditableCell] ?? originalValue) : originalValue;
+  };
+
+  // Helper to render editable cell
+  const renderEditableCell = (
+    cableNumber: string,
+    fieldName: string,
+    currentValue: any,
+    type: 'text' | 'number' | 'select' = 'text',
+    options?: string[]
+  ) => {
+    const editedCell = editableCells[cableNumber];
+    const value = editedCell ? editedCell[fieldName as keyof EditableCell] : currentValue;
+
+    if (!globalEditMode) {
+      // Display mode
+      if (type === 'number') {
+        return typeof value === 'number' ? value.toFixed(2) : value;
+      }
+      return String(value);
+    }
+
+    // Edit mode - show input or select
+    if (type === 'select' && options) {
+      return (
+        <select
+          className="w-full text-xs p-1 bg-slate-700 border border-slate-600 rounded text-slate-200"
+          value={String(value || '')}
+          onChange={(e) => handleCellChange(cableNumber, fieldName, e.target.value)}
+        >
+          {options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+    } else if (type === 'number') {
+      return (
+        <input
+          type="number"
+          className="w-full text-xs p-1 bg-slate-700 border border-slate-600 rounded text-slate-200"
+          value={value || ''}
+          onChange={(e) => handleCellChange(cableNumber, fieldName, e.target.value)}
+          step="0.01"
+        />
+      );
+    } else {
+      return (
+        <input
+          type="text"
+          className="w-full text-xs p-1 bg-slate-700 border border-slate-600 rounded text-slate-200"
+          value={value || ''}
+          onChange={(e) => handleCellChange(cableNumber, fieldName, e.target.value)}
+        />
+      );
+    }
+  };
   const invalidResults = results.filter((r) => r.status === 'FAILED').length;
   const totalLoad = results.reduce((sum, r) => sum + r.loadKW, 0);
 
@@ -849,9 +1130,40 @@ const ResultsTab = () => {
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-white flex items-center">
             <FileText className="mr-2" size={20} />
-            Cable Sizing Results & Analysis
+            Cable Sizing Results & Interactive Editor
           </h3>
           <div className="flex gap-3">
+            {/* Global Edit Mode Toggle */}
+            <button
+              onClick={() => setGlobalEditMode((s) => !s)}
+              className={`${globalEditMode ? 'bg-blue-600 hover:bg-blue-500' : 'bg-slate-600 hover:bg-slate-500'} text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition`}
+              title="Toggle edit mode for all cables"
+            >
+              <Edit2 size={16} />
+              {globalEditMode ? 'Editing' : 'Edit Mode'}
+            </button>
+            
+            {globalEditMode && (
+              <>
+                <button
+                  onClick={handleSaveAllEdits}
+                  className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium"
+                  title="Save all edits and persist globally"
+                >
+                  <Save size={16} />
+                  Save All
+                </button>
+                <button
+                  onClick={handleRevertAll}
+                  className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium"
+                  title="Revert all edits"
+                >
+                  <RotateCcw size={16} />
+                  Revert
+                </button>
+              </>
+            )}
+            
             <button
               onClick={handleExportExcel}
               className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
@@ -865,6 +1177,14 @@ const ResultsTab = () => {
             >
               <Download size={16} />
               PDF
+            </button>
+            <button
+              onClick={handleDownloadEdited}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+              title="Download current results as edited Excel file"
+            >
+              <Download size={16} />
+              Edited
             </button>
             <button
               onClick={() => setShowCustomize((s) => !s)}
@@ -904,7 +1224,7 @@ const ResultsTab = () => {
               </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={visibleColumns.feederType} onChange={() => setVisibleColumns((p) => ({ ...p, feederType: !p.feederType }))} />
-                <span>Feeder Type</span>
+                <span>Load Type</span>
               </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={visibleColumns.load} onChange={() => setVisibleColumns((p) => ({ ...p, load: !p.load }))} />
@@ -1073,7 +1393,7 @@ const ResultsTab = () => {
         </div>
       </div>
 
-      {/* Results Table - PROPER COLUMN ORDER WITH DERATING FIRST */}
+      {/* Results Table - EDITABLE SPREADSHEET STYLE */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
         <div className="overflow-x-auto overflow-y-auto results-table-scroll" style={{ height: '1200px' }}>
           <table className="w-full min-w-[4000px] text-xs border-collapse">
@@ -1109,7 +1429,7 @@ const ResultsTab = () => {
                   <th className="px-2 py-2 text-left text-slate-200 font-bold" rowSpan={2}>Breaker Type</th>
                 )}
                 {visibleColumns.feederType && (
-                  <th className="px-2 py-2 text-left text-slate-200 font-bold" rowSpan={2}>Type of Feeder</th>
+                  <th className="px-2 py-2 text-left text-slate-200 font-bold" rowSpan={2}>Load Type</th>
                 )}
                 {visibleColumns.motorRating && (
                   <th className="px-2 py-2 text-center text-slate-200 font-bold" rowSpan={2}>Load / Motor Rating (kW/kVA)</th>
@@ -1156,12 +1476,12 @@ const ResultsTab = () => {
                 
                 {/* DERATING FACTORS - BEFORE FLC */}
                 {deratingCount > 0 && (
-                  <th colSpan={deratingCount} className="px-2 py-2 text-center text-slate-900 font-bold bg-slate-700 border-l border-slate-500">Derating Factors (IEC)</th>
+                  <th colSpan={deratingCount} className="px-2 py-2 text-center text-white font-bold bg-slate-700 border-l border-slate-500">Derating Factors</th>
                 )}
 
                 {/* Section 1: FLC Sizing */}
                 {flcCount > 0 && (
-                  <th colSpan={flcCount} className="px-2 py-2 text-center text-white font-bold border-l border-slate-500">1. FLC Sizing</th>
+                  <th colSpan={flcCount} className="px-2 py-2 text-center text-white font-bold border-l border-slate-500">FLC Sizing</th>
                 )}
                 
                 {/* Cable Sizes by Constraints */}
@@ -1182,91 +1502,92 @@ const ResultsTab = () => {
                 <th className="px-2 py-2 text-center text-slate-200 font-bold border-l border-slate-500" rowSpan={2}>Status</th>
               </tr>
               
-              {/* Sub-headers */}
+              {/* Sub-headers with Electrical Formulas */}
               <tr className="bg-slate-650 border-b border-slate-600">
                 {/* Derating sub-headers - FIRST */}
                 {visibleColumns.deratingTotal && (
-                  <th className="px-2 py-1 text-center text-slate-900 text-xs font-bold bg-slate-600 border-l border-slate-500">
+                  <th className="px-2 py-1 text-center text-white text-xs font-bold bg-slate-600 border-l border-slate-500">
                     K_tot
-                    <div className="text-xs text-slate-400 mt-1">{getFormulaText(10)}</div>
+                    <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.deratingFactorTotal}</div>
                   </th>
                 )}
                 {visibleColumns.deratingAmbientTemp && (
-                  <th className="px-2 py-1 text-center text-slate-900 text-xs font-bold bg-slate-600">
+                  <th className="px-2 py-1 text-center text-white text-xs font-bold bg-slate-600">
                     K_t
-                    <div className="text-xs text-slate-400 mt-1">{getFormulaText(5)}</div>
+                    <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.deratingFactorTemp}</div>
                   </th>
                 )}
                 {visibleColumns.deratingGrouping && (
-                  <th className="px-2 py-1 text-center text-slate-900 text-xs font-bold bg-slate-600">
+                  <th className="px-2 py-1 text-center text-white text-xs font-bold bg-slate-600">
                     K_g
-                    <div className="text-xs text-slate-400 mt-1">{getFormulaText(6)}</div>
+                    <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.deratingFactorGrouping}</div>
                   </th>
                 )}
                 {visibleColumns.deratingThermalResistivity && (
-                  <th className="px-2 py-1 text-center text-slate-900 text-xs font-bold bg-slate-600">
+                  <th className="px-2 py-1 text-center text-white text-xs font-bold bg-slate-600">
                     K_s
-                    <div className="text-xs text-slate-400 mt-1">{getFormulaText(9)}</div>
+                    <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.deratingFactorSoil}</div>
                   </th>
                 )}
                 {visibleColumns.deratingDepth && (
-                  <th className="px-2 py-1 text-center text-slate-900 text-xs font-bold bg-slate-600">
+                  <th className="px-2 py-1 text-center text-white text-xs font-bold bg-slate-600">
                     K_d
-                    <div className="text-xs text-slate-400 mt-1">{getFormulaText(8)}</div>
+                    <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.deratingFactorDepth}</div>
                   </th>
                 )}
                 
                 {/* FLC sub-headers */}
                 {visibleColumns.fullLoadCurrent && (
-                  <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-500">
+                  <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold border-l border-slate-500">
                     FLC(A)
-                    <div className="text-xs text-slate-400 mt-1">{getFormulaText(1)}</div>
+                    <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.ratedCurrent}</div>
                   </th>
                 )}
                 {visibleColumns.deredCurrent && (
-                  <th className="px-2 py-1 text-center text-slate-300 text-xs">
+                  <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">
                     Derated(A)
-                    <div className="text-xs text-slate-400 mt-1">{getFormulaText(11)}</div>
+                    <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.deratedCurrent}</div>
                   </th>
                 )}
                 {visibleColumns.cableSize && (
-                  <th className="px-2 py-1 text-center text-slate-300 text-xs">Size(mm²)</th>
+                  <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">Size(mm²)</th>
                 )}
                 
                 {/* Cable sizes sub-headers */}
-                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-500">
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold border-l border-slate-500">
                   By Isc
-                  <div className="text-xs text-slate-400 mt-1">{getFormulaText(25)}</div>
+                  <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.shortCircuitCurrent_kA}</div>
                 </th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">By V-Drop(Run)</th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">By V-Drop(Start)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">By V-Drop(Run)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">By V-Drop(Start)</th>
                 
                 {/* Selected size sub-headers */}
-                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-500">Size(mm²)</th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">Runs</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold border-l border-slate-500">Size(mm²)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">Runs</th>
                 
                 {/* V-drop running sub-headers */}
-                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-500">
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold border-l border-slate-500">
                   ΔU(V)
-                  <div className="text-xs text-slate-400 mt-1">{getFormulaText(13)}</div>
+                  <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.voltageDrop_running_volt}</div>
                 </th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">%(≤5%)</th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">OK?</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">%(≤5%)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">OK?</th>
                 
                 {/* V-drop starting sub-headers */}
-                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-500">
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold border-l border-slate-500">
                   ΔU(V)
-                  <div className="text-xs text-slate-400 mt-1">{getFormulaText(16)}</div>
+                  <div className="text-xs text-cyan-300 mt-1 font-mono">{ELECTRICAL_FORMULAS.voltageDrop_starting_volt}</div>
                 </th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">%(≤15%)</th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">OK?</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">%(≤15%)</th>
+                <th className="px-2 py-1 text-center text-slate-300 text-xs font-bold">OK?</th>
                 
                 {/* Designation sub-headers */}
-                <th className="px-2 py-1 text-center text-slate-300 text-xs border-l border-slate-500">Cable Des.</th>
-                <th className="px-2 py-1 text-center text-slate-300 text-xs">R(Ω/km)</th>
+                <th className="px-2 py-1 text-center text-white font-semibold text-xs border-l border-slate-500">Cable Designation</th>
+                <th className="px-2 py-1 text-center text-white font-semibold text-xs">R(Ω/km)</th>
               </tr>
 
-              {/* removed full-width formula summary; per-column snippets are shown in each TH */}
+              {/* Electrical formulas now shown in each column subheader above */}
+
             </thead>
             
             <tbody className="divide-y divide-slate-700">
@@ -1295,30 +1616,44 @@ const ResultsTab = () => {
                     <td className="px-2 py-1 text-center text-slate-300">{result.voltage}</td>
                   )}
                   {visibleColumns.load && (
-                    <td className="px-2 py-1 text-center text-slate-300">{result.loadKW.toFixed(2)}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 min-w-[80px]">
+                      {renderEditableCell(result.cableNumber, 'loadKW', result.loadKW, 'number')}
+                    </td>
                   )}
                   {visibleColumns.routeLength && (
-                    <td className="px-2 py-1 text-center text-slate-300">{result.length.toFixed(1)}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 min-w-[80px]">
+                      {renderEditableCell(result.cableNumber, 'length', result.length, 'number')}
+                    </td>
                   )}
 
                   {/* Professional feeder detail cells (per Excel template) */}
                   {visibleColumns.breakerType && (
-                    <td className="px-2 py-1 text-slate-300">{(result as any).breakerType || '—'}</td>
+                    <td className="px-2 py-1 text-slate-300 min-w-[90px]">
+                      {renderEditableCell(result.cableNumber, 'breakerType', (result as any).breakerType || 'MCCB', 'select', ['MCB', 'MCCB', 'ACB', 'DC'])}
+                    </td>
                   )}
                   {visibleColumns.feederType && (
-                    <td className="px-2 py-1 text-slate-300">{(result as any).feederType || 'F'}</td>
+                    <td className="px-2 py-1 text-slate-300 min-w-[100px]">
+                      {renderEditableCell(result.cableNumber, 'feederType', (result as any).feederType || 'Pump', 'select', ['Pump', 'Fan', 'Heater', 'Transformer', 'Feeder', 'Compressor', 'Motor'])}
+                    </td>
                   )}
                   {visibleColumns.motorRating && (
-                    <td className="px-2 py-1 text-center text-slate-300">{(result as any).motorRating ? (Number((result as any).motorRating).toFixed(2)) : (result.loadKW ? result.loadKW.toFixed(2) : '0.00')}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 min-w-[90px]">
+                      {renderEditableCell(result.cableNumber, 'breakerSize', (result as any).motorRating || result.loadKW, 'number')}
+                    </td>
                   )}
                   {visibleColumns.voltageKV && (
                     <td className="px-2 py-1 text-center text-slate-300">{((result.voltage || 0) / 1000).toFixed(3)}</td>
                   )}
                   {visibleColumns.powerFactor && (
-                    <td className="px-2 py-1 text-center text-slate-300">{(result.powerFactor || 0.85).toFixed(2)}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 min-w-[80px]">
+                      {renderEditableCell(result.cableNumber, 'powerFactor', result.powerFactor, 'number')}
+                    </td>
                   )}
                   {visibleColumns.efficiency && (
-                    <td className="px-2 py-1 text-center text-slate-300">{(result.efficiency || 0.95).toFixed(2)}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 min-w-[80px]">
+                      {renderEditableCell(result.cableNumber, 'efficiency', result.efficiency, 'number')}
+                    </td>
                   )}
                   {visibleColumns.voltageVariationFactor && (
                     <td className="px-2 py-1 text-center text-slate-300">{(result.voltageVariationFactor || 1.0).toFixed(2)}</td>
@@ -1333,7 +1668,9 @@ const ResultsTab = () => {
                     <td className="px-2 py-1 text-center text-slate-300">{(result.powerSupply || '3-phase')}</td>
                   )}
                   {visibleColumns.installationMethod && (
-                    <td className="px-2 py-1 text-center text-slate-300">{(result.installationMethod || 'Air')}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 min-w-[90px]">
+                      {renderEditableCell(result.cableNumber, 'installationMethod', result.installationMethod, 'select', ['Air', 'Trench', 'Duct'])}
+                    </td>
                   )}
                   {visibleColumns.motorStartingCurrent && (
                     <td className="px-2 py-1 text-center text-slate-300">{(result.startingCurrent || 0).toFixed(1)}</td>
@@ -1342,7 +1679,9 @@ const ResultsTab = () => {
                     <td className="px-2 py-1 text-center text-slate-300">{((result as any).motorStartingPF || 0.4).toFixed(2)}</td>
                   )}
                   {visibleColumns.numberOfCores && (
-                    <td className="px-2 py-1 text-center text-slate-300">{result.numberOfCores}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 min-w-[90px]">
+                      {renderEditableCell(result.cableNumber, 'numberOfCores', result.numberOfCores, 'select', ['1C', '2C', '3C', '4C'])}
+                    </td>
                   )}
                   {visibleColumns.cableSize && (
                     <td className="px-2 py-1 text-center font-bold text-blue-400">{result.cableSize || result.suitableCableSize}</td>
@@ -1353,7 +1692,7 @@ const ResultsTab = () => {
 
                   {/* Derating Factors - FIRST */}
                   {visibleColumns.deratingTotal && (
-                    <td className="px-2 py-1 text-center font-bold text-slate-300 border-l border-slate-600">{result.deratingFactor.toFixed(3)}</td>
+                    <td className="px-2 py-1 text-center font-bold text-slate-300 border-l border-slate-600">{getValue(result.cableNumber, 'deratingFactorTotal', result.deratingFactor).toFixed(3)}</td>
                   )}
                   {visibleColumns.deratingAmbientTemp && (
                     <td className="px-2 py-1 text-center text-sm text-slate-300">{(result.deratingComponents?.K_temp || 1).toFixed(2)}</td>
@@ -1370,10 +1709,10 @@ const ResultsTab = () => {
 
                   {/* FLC Sizing */}
                   {visibleColumns.fullLoadCurrent && (
-                    <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600">{result.fullLoadCurrent.toFixed(1)}</td>
+                    <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600">{getValue(result.cableNumber, 'ratedCurrent', result.fullLoadCurrent).toFixed(1)}</td>
                   )}
                   {visibleColumns.deredCurrent && (
-                    <td className="px-2 py-1 text-center text-slate-300">{result.deratedCurrent.toFixed(1)}</td>
+                    <td className="px-2 py-1 text-center text-slate-300">{getValue(result.cableNumber, 'deratedCurrent', result.deratedCurrent).toFixed(1)}</td>
                   )}
                   {visibleColumns.cableSize && (
                     <td className="px-2 py-1 text-center font-bold text-blue-400">{result.sizeByCurrent}</td>
@@ -1385,8 +1724,8 @@ const ResultsTab = () => {
                   <td className="px-2 py-1 text-center text-purple-400 font-medium">{(result.sizeByVoltageDrop_starting || 0)}</td>
                   
                   {/* Selected Size */}
-                  <td className="px-2 py-1 text-center font-bold text-green-400 bg-green-900/20 border-l border-slate-600">{result.suitableCableSize}</td>
-                  <td className="px-2 py-1 text-center font-bold text-green-400 bg-green-900/20">{result.numberOfRuns}</td>
+                  <td className="px-2 py-1 text-center font-bold text-green-400 bg-green-900/20 border-l border-slate-600">{getValue(result.cableNumber, 'selectedSize', result.suitableCableSize)}</td>
+                  <td className="px-2 py-1 text-center font-bold text-green-400 bg-green-900/20">{getValue(result.cableNumber, 'numberOfRuns', result.numberOfRuns)}</td>
                   
                   {/* V-Drop Running */}
                   <td className="px-2 py-1 text-center text-slate-300 border-l border-slate-600">{result.voltageDrop_running_volt.toFixed(2)}</td>
@@ -1407,9 +1746,9 @@ const ResultsTab = () => {
                   </td>
                   
                   {/* Designation */}
-                  <td className="px-2 py-1 text-center text-purple-300 text-xs font-medium border-l border-slate-600 whitespace-nowrap min-w-[180px]">{result.cableDesignation}</td>
-                  <td className="px-2 py-1 text-center text-cyan-400 font-medium">{result.cableResistance_ohm_per_km.toFixed(3)}</td>
-                  
+                  <td className="px-2 py-1 text-center text-cyan-400 text-xs font-medium border-l border-slate-600 whitespace-nowrap min-w-[200px]">{result.cableDesignation}</td>
+                  <td className="px-2 py-1 text-center text-slate-300 font-medium">{result.cableResistance_ohm_per_km.toFixed(4)}</td>
+
                   {/* Status */}
                   <td className="px-2 py-1 text-center align-middle border-l border-slate-600">
                     {result.status === 'APPROVED' ? (

@@ -4,41 +4,38 @@ import * as XLSX from 'xlsx';
 import { Upload, FileText, Calculator, Edit, Trash2, Loader2, Download, AlertCircle, CheckCircle } from 'lucide-react';
 import { normalizeFeeders, analyzeAllPaths, autoDetectColumnMappings } from '../utils/pathDiscoveryService';
 import { usePathContext } from '../context/PathContext';
-import { generateDemoData } from '../utils/demoData';
 import { CLEAN_DEMO_FEEDERS } from '../utils/cleanDemoData';
 import ColumnMappingModal from './ColumnMappingModal';
 
 // Template generation function with SIMPLE, WORKING hierarchy
 const generateFeederTemplate = () => {
-  // Use the demo data which is proven to work with the path discovery algorithm
-  const templateData = generateDemoData();
-
-  // Filter out empty rows for Excel export
-  const cleanData = templateData.filter((row: any) => Object.keys(row).length > 0);
+  // Use CLEAN_DEMO_FEEDERS which matches both template and demo loader
+  const templateData = [...CLEAN_DEMO_FEEDERS];
 
   // Create workbook and worksheet
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(cleanData);
+  const ws = XLSX.utils.json_to_sheet(templateData);
 
-  // Set column widths for better readability
+  // Set column widths for better readability (matching CLEAN_DEMO_FEEDERS columns)
   const colWidths = [
     { wch: 10 }, // Serial No
-    { wch: 12 }, // Cable Number
-    { wch: 30 }, // Feeder Description
-    { wch: 15 }, // From Bus
-    { wch: 15 }, // To Bus
-    { wch: 12 }, // Voltage (V)
-    { wch: 12 }, // Power Factor
-    { wch: 15 }, // Efficiency (%)
-    { wch: 15 }, // Derating Factor
-    { wch: 12 }, // Breaker Type
+    { wch: 14 }, // Cable Number
+    { wch: 28 }, // Feeder Description
+    { wch: 16 }, // From Bus
+    { wch: 16 }, // To Bus
+    { wch: 13 }, // Voltage (V)
     { wch: 10 }, // Load KW
-    { wch: 12 }, // Load KVA
-    { wch: 12 }, // Cable Type
+    { wch: 12 }, // Length (m)
+    { wch: 13 }, // Power Factor
+    { wch: 14 }, // Efficiency (%)
+    { wch: 15 }, // Number of Cores
+    { wch: 10 }, // Material
+    { wch: 12 }, // Insulation
     { wch: 18 }, // Installation Method
-    { wch: 18 }, // Ambient Temp (°C)
-    { wch: 18 }, // Ground Temp (°C)
-    { wch: 12 }  // Length (m)
+    { wch: 15 }, // Starting Method
+    { wch: 15 }, // Protection Type
+    { wch: 12 }, // Load Type
+    { wch: 16 }  // Max SC Current (kA)
   ];
   ws['!cols'] = colWidths;
 
@@ -47,55 +44,87 @@ const generateFeederTemplate = () => {
   // Create instructions sheet
   const instructionsData = [
     { 
-      'KEY RULE': '★ CRITICAL ★',
-      'Description': 'From Bus = WHERE THE LOAD IS (child/destination)',
-      'Example': 'If a motor is at "MOTOR-1", From Bus = "MOTOR-1"'
+      'FIELD': 'From Bus',
+      'REQUIRED': 'YES',
+      'Description': 'Bus where the cable load/destination is located (e.g., MOTOR-1, PUMP-X)'
     },
     { 
-      'KEY RULE': '★ CRITICAL ★',
-      'Description': 'To Bus = WHERE POWER COMES FROM (parent/source)',
-      'Example': 'If power comes from "PMCC-1", To Bus = "PMCC-1"'
-    },
-    { 'KEY RULE': '', 'Description': '', 'Example': '' },
-    { 
-      'KEY RULE': 'HIERARCHY DIRECTION',
-      'Description': 'Cables always go FROM loads (bottom) TO panels (top)',
-      'Example': 'MOTOR-1 ← MCC-1 ← PMCC-1 ← MAIN-PANEL ← TRF-MAIN'
-    },
-    { 'KEY RULE': '', 'Description': '', 'Example': '' },
-    { 
-      'KEY RULE': 'EXAMPLE PATH',
-      'Description': 'Row: From Bus = "MOTOR-1", To Bus = "MCC-1"',
-      'Example': 'Means: Power flows from MCC-1 to MOTOR-1'
+      'FIELD': 'To Bus',
+      'REQUIRED': 'YES',
+      'Description': 'Bus where power comes from/source panel (e.g., MAIN-PANEL, HVAC-PANEL)'
     },
     { 
-      'KEY RULE': 'BUS NAMING',
-      'Description': 'Use consistent bus names throughout the sheet',
-      'Example': 'TRF-MAIN, MAIN-PANEL, PMCC-1, MCC-1, MOTOR-1, LIGHT-L1'
-    },
-    { 'KEY RULE': '', 'Description': '', 'Example': '' },
-    { 
-      'KEY RULE': 'WHAT THE SYSTEM DOES',
-      'Description': 'Automatically discovers all cable paths from loads back to transformer',
-      'Example': '7 feeders in template = 4 unique paths discovered automatically'
+      'FIELD': 'Load KW',
+      'REQUIRED': 'YES',
+      'Description': 'Actual power consumption in kilowatts (e.g., 37 for 37kW motor)'
     },
     { 
-      'KEY RULE': 'VALIDATION',
-      'Description': 'Paths are validated for voltage drop compliance (IEC 60364)',
-      'Example': 'Green checkmark ✓ = Valid (V-drop < 5%), Red ✗ = Exceeds limit'
+      'FIELD': 'Voltage (V)',
+      'REQUIRED': 'YES',
+      'Description': 'Supply voltage in volts (typically 415V for 3-phase, 230V for single-phase)'
     },
     { 
-      'KEY RULE': 'OPTIMIZE PAGE',
-      'Description': 'All discovered paths appear in Optimization tab for cable sizing',
-      'Example': 'Select appropriate cable size from dropdown for each path'
+      'FIELD': 'Length (m)',
+      'REQUIRED': 'YES',
+      'Description': 'Cable run length in meters from source to load'
+    },
+    { 
+      'FIELD': 'Power Factor',
+      'REQUIRED': 'Optional',
+      'Description': 'Load power factor (0.85-0.95 for motors, 0.95-1.0 for resistive loads, default 0.85)'
+    },
+    { 
+      'FIELD': 'Efficiency',
+      'REQUIRED': 'Optional',
+      'Description': 'Equipment efficiency percentage (0-100%, default 95% for motors)'
+    },
+    { 
+      'FIELD': 'Number of Cores',
+      'REQUIRED': 'YES',
+      'Description': '1C, 2C, 3C (most common), or 4C depending on supply type'
+    },
+    { 
+      'FIELD': 'Material',
+      'REQUIRED': 'YES',
+      'Description': 'Conductor material: Cu (Copper - recommended) or Al (Aluminum)'
+    },
+    { 
+      'FIELD': 'Insulation',
+      'REQUIRED': 'YES',
+      'Description': 'Cable insulation: XLPE (preferred) or PVC'
+    },
+    { 
+      'FIELD': 'Installation Method',
+      'REQUIRED': 'YES',
+      'Description': 'Air (cable tray), Trench (underground), or Duct (conduit)'
+    },
+    { 
+      'FIELD': 'Starting Method',
+      'REQUIRED': 'For Motors',
+      'Description': 'DOL (Direct), StarDelta, SoftStarter, or VFD'
+    },
+    { 
+      'FIELD': 'Protection Type',
+      'REQUIRED': 'YES',
+      'Description': 'ACB (main), MCCB (branch), MCB (circuits), or None'
+    },
+    { 
+      'FIELD': 'Load Type',
+      'REQUIRED': 'YES',
+      'Description': 'Motor, Pump, Compressor, Fan, Heater, Transformer, or Feeder'
+    },
+    { 
+      'FIELD': 'Max SC Current (kA)',
+      'REQUIRED': 'For ACB',
+      'Description': 'Short-circuit current in kiloamperes at the installation point'
     }
   ];
 
   const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
   const instructionWidths = [
-    { wch: 20 },
-    { wch: 55 },
-    { wch: 50 }
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 70 }
   ];
   wsInstructions['!cols'] = instructionWidths;
   XLSX.utils.book_append_sheet(wb, wsInstructions, 'INSTRUCTIONS - Read First');
@@ -267,10 +296,9 @@ const LoadingOverlay = ({ message, progress }: { message: string; progress?: num
 };
 
 const SizingTab = () => {
-  const { setPathAnalysis: setContextPathAnalysis, setNormalizedFeeders: setContextNormalizedFeeders } = usePathContext();
+  const { setPathAnalysis: setContextPathAnalysis, setNormalizedFeeders: setContextNormalizedFeeders, setOriginalFeeders, catalogueData, setCatalogueData } = usePathContext();
   const [feederData, setFeederData] = useState<FeederData[]>([]);
   const [feederHeaders, setFeederHeaders] = useState<string[]>([]);
-  const [catalogueData, setCatalogueData] = useState<Record<string, CableCatalogue[]>>({});
   const [activeCatalogueTab, setActiveCatalogueTab] = useState<string>('3C');
   const [isCalculating, setIsCalculating] = useState(false);
   const [editingRow, setEditingRow] = useState<number | null>(null);
@@ -306,6 +334,7 @@ const SizingTab = () => {
     setPathAnalysis(analysis);
     setContextPathAnalysis(analysis);
     setContextNormalizedFeeders(normalizedFeeders);
+    setOriginalFeeders([...normalizedFeeders]); // Store original for revert
   }, [setContextPathAnalysis, setContextNormalizedFeeders]);
 
   const onFeederDrop = useCallback((acceptedFiles: File[]) => {
@@ -509,7 +538,15 @@ const SizingTab = () => {
           setLoadingMessage('Catalogue processing complete!');
 
           setTimeout(() => {
-            setCatalogueData(allSheetsData);
+            // Store catalogue in context so other components (ResultsTab / engine) can access it
+            try {
+              setCatalogueData(allSheetsData);
+              // Also set a temporary global hook used by ResultsTab until context wiring is fully used
+              (window as any).__USER_AMPACITY_TABLES__ = allSheetsData;
+            } catch (e) {
+              console.warn('Failed to set catalogue in context/global:', e);
+            }
+
             setActiveCatalogueTab(firstSheetName);
             setIsLoadingCatalogue(false);
 
@@ -587,6 +624,7 @@ const SizingTab = () => {
     setPathAnalysis(analysis);
     setContextPathAnalysis(analysis);
     setContextNormalizedFeeders(normalizedFeeders); // Store normalized feeders for Results page
+    setOriginalFeeders([...normalizedFeeders]); // Store original for revert
 
     console.log(`✓ Processed ${remappedFeeders.length} feeders`);
     console.log(`✓ Discovered ${analysis.totalPaths} paths`);
@@ -690,10 +728,10 @@ const SizingTab = () => {
   };
   
   const defaultCatalogueAllCores = getKECCatalogue();
-  const catalogueSheets: Record<string, CableCatalogue[]> = Object.keys(catalogueData).length > 0 ? catalogueData : defaultCatalogueAllCores;
-  const catalogueTabs = Object.keys(catalogueSheets);
-  const activeCatalogue = (catalogueSheets[activeCatalogueTab] as CableCatalogue[]) || defaultCatalogueAllCores['3C'];
-  const catalogueName = Object.keys(catalogueData).length > 0 ? 'User Uploaded Catalogue' : 'KEC Standard (IEC 60287)';
+  const catalogueSheets: Record<string, CableCatalogue[]> = (catalogueData && Object.keys(catalogueData).length > 0) ? catalogueData : defaultCatalogueAllCores;
+  const catalogueTabs = Object.keys(catalogueSheets || {});
+  const activeCatalogue = (catalogueSheets && (catalogueSheets[activeCatalogueTab] as CableCatalogue[])) || defaultCatalogueAllCores['3C'];
+  const catalogueName = (catalogueData && Object.keys(catalogueData).length > 0) ? 'User Uploaded Catalogue' : 'KEC Standard (IEC 60287)';
 
   return (
     <div className="space-y-6">

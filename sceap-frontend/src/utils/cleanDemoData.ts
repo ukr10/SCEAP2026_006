@@ -17,7 +17,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'From Bus': 'MAIN-DISTRIBUTION',
     'To Bus': 'TRF-MAIN',
     'Voltage (V)': 415,
-    'Load KW': 400,          // Main feeder - large load
+    'Load KW': 200,          // Reduced from 400kW to realistic size for 3C at 415V
     'Length (m)': 10,
     'Power Factor': 0.95,
     'Efficiency (%)': 98,
@@ -27,6 +27,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'MCCB',
+    'Load Type': 'Transformer',
     'Max SC Current (kA)': 50
   },
   {
@@ -46,6 +47,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'ACB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 30
   },
   {
@@ -65,6 +67,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'ACB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 28
   },
   {
@@ -84,6 +87,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'ACB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 25
   },
   {
@@ -103,6 +107,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'MCCB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 20
   },
 
@@ -124,6 +129,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'DOL',          // Direct On Line - important!
     'Protection Type': 'ACB',
+    'Load Type': 'Pump',
     'Max SC Current (kA)': 12
   },
   {
@@ -143,6 +149,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'StarDelta',   // Star-Delta reduced starting
     'Protection Type': 'MCCB',
+    'Load Type': 'Pump',
     'Max SC Current (kA)': 10
   },
   {
@@ -162,6 +169,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'SoftStarter', // Soft start
     'Protection Type': 'MCCB',
+    'Load Type': 'Compressor',
     'Max SC Current (kA)': 8
   },
 
@@ -183,6 +191,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'DOL',
     'Protection Type': 'ACB',
+    'Load Type': 'Heater',
     'Max SC Current (kA)': 15
   },
   {
@@ -202,6 +211,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'DOL',
     'Protection Type': 'ACB',
+    'Load Type': 'Heater',
     'Max SC Current (kA)': 15
   },
   {
@@ -221,6 +231,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'DOL',
     'Protection Type': 'MCCB',
+    'Load Type': 'Fan',
     'Max SC Current (kA)': 8
   },
 
@@ -242,6 +253,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'MCB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 6
   },
   {
@@ -261,6 +273,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'MCB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 6
   },
   {
@@ -280,6 +293,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'MCB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 8
   },
 
@@ -301,6 +315,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'MCCB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 10
   },
   {
@@ -320,6 +335,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'MCCB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 12
   },
   {
@@ -339,6 +355,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Installation Method': 'Air',
     'Starting Method': 'None',
     'Protection Type': 'ACB',
+    'Load Type': 'Feeder',
     'Max SC Current (kA)': 12
   }
 ];
