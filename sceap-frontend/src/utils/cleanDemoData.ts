@@ -26,7 +26,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'None',
-    'Protection Type': 'MCCB',
+    'Protection Type': 'ACB',
     'Load Type': 'Transformer',
     'Max SC Current (kA)': 50
   },
@@ -46,7 +46,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'None',
-    'Protection Type': 'ACB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Feeder',
     'Max SC Current (kA)': 30
   },
@@ -59,7 +59,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Voltage (V)': 415,
     'Load KW': 120,
     'Length (m)': 55,
-    'Power Factor': 0.85,
+    'Power Factor': 0.95,
     'Efficiency (%)': 94,
     'Number of Cores': '3C',
     'Material': 'Cu',
@@ -86,7 +86,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'None',
-    'Protection Type': 'ACB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Feeder',
     'Max SC Current (kA)': 25
   },
@@ -99,7 +99,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Voltage (V)': 415,
     'Load KW': 50,
     'Length (m)': 30,
-    'Power Factor': 0.9,
+    'Power Factor': 0.95,
     'Efficiency (%)': 96,
     'Number of Cores': '3C',
     'Material': 'Cu',
@@ -128,7 +128,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'DOL',          // Direct On Line - important!
-    'Protection Type': 'ACB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Pump',
     'Max SC Current (kA)': 12
   },
@@ -190,7 +190,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'DOL',
-    'Protection Type': 'ACB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Heater',
     'Max SC Current (kA)': 15
   },
@@ -210,7 +210,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'DOL',
-    'Protection Type': 'ACB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Heater',
     'Max SC Current (kA)': 15
   },
@@ -252,7 +252,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'None',
-    'Protection Type': 'MCB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Feeder',
     'Max SC Current (kA)': 6
   },
@@ -272,7 +272,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'None',
-    'Protection Type': 'MCB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Feeder',
     'Max SC Current (kA)': 6
   },
@@ -292,7 +292,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'None',
-    'Protection Type': 'MCB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Feeder',
     'Max SC Current (kA)': 8
   },
@@ -354,7 +354,7 @@ export const CLEAN_DEMO_FEEDERS = [
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
     'Starting Method': 'None',
-    'Protection Type': 'ACB',
+    'Protection Type': 'MCCB',
     'Load Type': 'Feeder',
     'Max SC Current (kA)': 12
   }
