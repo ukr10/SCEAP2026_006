@@ -15,7 +15,7 @@
  * 10. VALIDATE: All constraints must pass or upgrade cable
  */
 
-import { AmpacityTables, DeratingTables, LoadTypeSpecs, MotorStartingMultipliers, ShortCircuitData } from './CableEngineeringData';
+import { AmpacityTables, DeratingTables, LoadTypeSpecs, MotorStartingMultipliers, ShortCircuitData, VoltageLimits } from './CableEngineeringData';
 
 export interface CableSizingInput {
   // Load & installation
@@ -26,6 +26,10 @@ export interface CableSizingInput {
   efficiency?: number;
   powerFactor?: number;
   cableLength: number;
+  
+  // For fixed loads (transformers, fixed feeders): direct FLC from rated power (MVA) or current
+  // Formula: I = D / (√3 × V) where D is in MVA or kW
+  ratedCurrentOrMVA?: number;
   
   // Cable & environment (MANDATORY for derating)
   numberOfCores: '1C' | '2C' | '3C' | '4C';
@@ -312,6 +316,15 @@ class CableSizingEngine_V2 {
   private calculateFLC(): number {
     const P = this.input.ratedPowerKW;
     const V = this.input.voltage;
+    
+    // If rated current/MVA is provided (fixed loads like transformers), use direct formula
+    // I = D / (√3 × V) per Excel formula: =IF(D8="",...,(D8/(1.732*F8)))
+    if (this.input.ratedCurrentOrMVA && this.input.ratedCurrentOrMVA > 0) {
+      return this.input.ratedCurrentOrMVA / (this.sqrt3 * V);
+    }
+    
+    // Otherwise, calculate from load power (motors, variable loads, feeders)
+    // I = P / (√3 × V × cosφ × η)
     const specs = (LoadTypeSpecs as any)[this.input.loadType] || {};
     const η = this.input.efficiency ?? specs.typicalEfficiency ?? 0.95;
     const cosφ = this.input.powerFactor ?? specs.typicalPowerFactor ?? 0.85;
@@ -456,40 +469,50 @@ class CableSizingEngine_V2 {
   }
 
   private calculateVoltageDropRunning(flc: number, catalogEntry: any): { percent: number; voltage: number } {
-    const R = catalogEntry.resistance_90C;
-    
+    const R = catalogEntry.resistance_90C; // Ω/km
+    const X = catalogEntry.reactance || 0; // Ω/km
+    const cosphi = this.input.powerFactor ?? (LoadTypeSpecs as any)[this.input.loadType]?.typicalPowerFactor ?? 0.85;
+    const sinphi = Math.sin(Math.acos(Math.max(-1, Math.min(1, cosphi))));
+
+    // VD (V) = √3 × I × L(km) × (R × cosφ + X × sinφ)
+    const L_km = this.input.cableLength / 1000;
     let vdrop: number;
     if (this.input.phase === '3Ø') {
-      vdrop = (this.sqrt3 * flc * this.input.cableLength * R) / 1000;
+      vdrop = this.sqrt3 * flc * L_km * (R * cosphi + X * sinphi);
     } else {
-      vdrop = (flc * this.input.cableLength * R) / 1000;
+      vdrop = flc * L_km * (R * cosphi + X * sinphi);
     }
 
-    const vdropPercent = (vdrop / this.input.voltage);
+    const vdropPercent = vdrop / this.input.voltage;
     return { percent: vdropPercent, voltage: vdrop };
   }
 
   private calculateVoltageDropStarting(iStarting: number, catalogEntry: any): { percent: number; voltage: number } {
-    const R = catalogEntry.resistance_90C;
-    
+    const R = catalogEntry.resistance_90C; // Ω/km
+    const X = catalogEntry.reactance || 0; // Ω/km
+    const cosphi = this.input.powerFactor ?? (LoadTypeSpecs as any)[this.input.loadType]?.typicalPowerFactor ?? 0.85;
+    const sinphi = Math.sin(Math.acos(Math.max(-1, Math.min(1, cosphi))));
+
+    const L_km = this.input.cableLength / 1000;
     let vdrop: number;
     if (this.input.phase === '3Ø') {
-      vdrop = (this.sqrt3 * iStarting * this.input.cableLength * R) / 1000;
+      vdrop = this.sqrt3 * iStarting * L_km * (R * cosphi + X * sinphi);
     } else {
-      vdrop = (iStarting * this.input.cableLength * R) / 1000;
+      vdrop = iStarting * L_km * (R * cosphi + X * sinphi);
     }
 
-    const vdropPercent = (vdrop / this.input.voltage);
+    const vdropPercent = vdrop / this.input.voltage;
     return { percent: vdropPercent, voltage: vdrop };
   }
 
   private getVoltageLimits(): { running: number; starting: number } {
+    // Use VoltageLimits table from data for consistency with workbook
     if (this.input.loadType === 'Motor') {
-      return { running: 0.03, starting: 0.15 }; // 3% running, 15% starting
+      return { running: VoltageLimits.running.motor_branch, starting: VoltageLimits.starting.DOL };
     } else if (this.input.loadType === 'Heater') {
-      return { running: 0.05, starting: 0.10 };
+      return { running: VoltageLimits.running.resistive_load, starting: VoltageLimits.starting.SoftStarter };
     } else {
-      return { running: 0.05, starting: 0.10 }; // Default
+      return { running: VoltageLimits.running.general, starting: VoltageLimits.starting.SoftStarter };
     }
   }
 

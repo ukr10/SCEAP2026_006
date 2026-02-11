@@ -3,6 +3,13 @@
  * Based on IEC 60287 / IEC 60364 / IS 732
  * For thermal power plants, EPCs, and consultancies
  * 
+ * VOLTAGE SUPPORT:
+ * - HT (High Tension): 6.6kV, 11kV, 22kV, 33kV systems (per project: 11kV primary)
+ * - LV (Low Voltage): 230V/400V, 3-phase and single-phase systems
+ * 
+ * The sizing algorithm applies the same IEC standards and derating logic for both HT and LV.
+ * Only the cable tables, voltage limits, and protection standards differ.
+ * 
  * These tables are the source of truth for all cable calculations
  * Never hardcode or assume values from outside these tables
  */
@@ -187,9 +194,9 @@ export const AmpacityTables = {
     '120': { air: 357, trench: 353, duct: 292, resistance_90C: 0.197, reactance: 0.0720, cableDia: 35.8 },
     '150': { air: 409, trench: 394, duct: 329, resistance_90C: 0.160, reactance: 0.0720, cableDia: 39.0 },
     '185': { air: 471, trench: 445, duct: 372, resistance_90C: 0.128, reactance: 0.0720, cableDia: 43.6 },
-    '240': { air: 556, trench: 514, duct: 429, resistance_90C: 0.0986, reactance: 0.0920, cableDia: 49.6 },
-    '300': { air: 633, trench: 575, duct: 483, resistance_90C: 0.0800, reactance: 0.0900, cableDia: 54.2 },
-    '400': { air: 728, trench: 649, duct: 554, resistance_90C: 0.0640, reactance: 0.0900, cableDia: 61.8 }
+    '240': { air: 556, trench: 514, duct: 429, resistance_90C: 0.162, reactance: 0.088, cableDia: 49.6 },
+    '300': { air: 633, trench: 575, duct: 483, resistance_90C: 0.13, reactance: 0.086, cableDia: 54.2 },
+    '400': { air: 728, trench: 649, duct: 554, resistance_90C: 0.1018, reactance: 0.0937, cableDia: 61.8 }
   },
 
   // 4-core cables (600/1100V XLPE @ 90°C)
@@ -217,18 +224,56 @@ export const AmpacityTables = {
     '120': { air: 400, trench: 375, duct: 356, resistance_90C: 0.1970, reactance: 0.0970, cableDia: 19.6 },
     '150': { air: 460, trench: 419, duct: 385, resistance_90C: 0.1600, reactance: 0.0970, cableDia: 21.6 },
     '185': { air: 528, trench: 471, duct: 425, resistance_90C: 0.1280, reactance: 0.0960, cableDia: 23.6 },
-    '240': { air: 622, trench: 542, duct: 476, resistance_90C: 0.0986, reactance: 0.0920, cableDia: 26.5 },
-    '300': { air: 709, trench: 606, duct: 519, resistance_90C: 0.0800, reactance: 0.0900, cableDia: 28.9 },
-    '400': { air: 810, trench: 671, duct: 551, resistance_90C: 0.0640, reactance: 0.0900, cableDia: 32.4 },
+    '240': { air: 622, trench: 542, duct: 476, resistance_90C: 0.162, reactance: 0.088, cableDia: 26.5 },
+    '300': { air: 709, trench: 606, duct: 519, resistance_90C: 0.162, reactance: 0.088, cableDia: 28.9 },
+    '400': { air: 810, trench: 671, duct: 551, resistance_90C: 0.1018, reactance: 0.0937, cableDia: 32.4 },
     '500': { air: 916, trench: 744, duct: 598, resistance_90C: 0.0525, reactance: 0.0890, cableDia: 36.0 },
     '630': { air: 1032, trench: 817, duct: 645, resistance_90C: 0.0428, reactance: 0.0860, cableDia: 42.4 }
   }
 };
 
 /**
+ * LV (LOW VOLTAGE) AMPACITY TABLES - 230V / 400V Systems
+ * For use in 3-phase and single-phase 400V distribution
+ * Can use the same sizing engine with these tables for LV feeders and motors
+ * 
+ * These are typical EU/IEC standard multicore cables (600/1000V XLPE @ 70°C / 90°C)
+ * Sizes range from 1.5mm² to 400mm² (common in industrial LV systems)
+ * 
+ * To use LV tables: Pass them to CableSizingEngine_V2 constructor or replace AmpacityTables
+ * The sizing algorithm works identically for HT and LV - only tables and limits differ
+ */
+export const AmpacityTables_LV = {
+  // 3-core cables (400V, 600/1000V XLPE @ 70°C installation temp)
+  '3C': {
+    '1.5': { air: 20, trench: 24, duct: 19, resistance_90C: 12.1, reactance: 0.11, cableDia: 9.8 },
+    '2.5': { air: 27, trench: 32, duct: 26, resistance_90C: 7.41, reactance: 0.10, cableDia: 10.8 },
+    '4': { air: 36, trench: 42, duct: 35, resistance_90C: 4.61, reactance: 0.09, cableDia: 11.8 },
+    '6': { air: 46, trench: 54, duct: 45, resistance_90C: 3.08, reactance: 0.088, cableDia: 13.2 },
+    '10': { air: 64, trench: 74, duct: 61, resistance_90C: 1.83, reactance: 0.082, cableDia: 14.8 },
+    '16': { air: 85, trench: 97, duct: 79, resistance_90C: 1.15, reactance: 0.081, cableDia: 16.9 },
+    '25': { air: 111, trench: 124, duct: 102, resistance_90C: 0.727, reactance: 0.08, cableDia: 19.6 },
+    '35': { air: 137, trench: 150, duct: 122, resistance_90C: 0.524, reactance: 0.078, cableDia: 21.9 },
+    '50': { air: 166, trench: 179, duct: 146, resistance_90C: 0.387, reactance: 0.074, cableDia: 24.9 },
+    '70': { air: 210, trench: 223, duct: 182, resistance_90C: 0.268, reactance: 0.073, cableDia: 28.0 },
+    '95': { air: 259, trench: 272, duct: 222, resistance_90C: 0.193, reactance: 0.072, cableDia: 32.0 },
+    '120': { air: 299, trench: 312, duct: 254, resistance_90C: 0.153, reactance: 0.071, cableDia: 35.3 },
+    '150': { air: 343, trench: 356, duct: 290, resistance_90C: 0.124, reactance: 0.071, cableDia: 38.6 },
+    '185': { air: 396, trench: 407, duct: 332, resistance_90C: 0.0991, reactance: 0.07, cableDia: 42.8 },
+    '240': { air: 467, trench: 474, duct: 388, resistance_90C: 0.0754, reactance: 0.069, cableDia: 48.6 },
+    '300': { air: 533, trench: 538, duct: 440, resistance_90C: 0.0601, reactance: 0.068, cableDia: 53.0 }
+  },
+  // Add 1C and 4C if needed for single-phase or 4-pole systems
+  // Can be extended with more standard LV sizes as required
+};
+
+/**
  * SECTION 3: DERATING FACTORS (Catalog-based from real project data)
  * Format: K = K1(temp) × K2(grouping) × K3(ground temp) × K4(depth) × K5(thermal)
  * Reference: XLPE cable at 55°C ambient, buried 1200mm, soil resistivity 1.2 °C.m/W
+ * 
+ * NOTE: Derating factors apply EQUALLY to HT and LV systems
+ * The ambient temperature, grouping, soil conditions affect cable life regardless of voltage
  */
 
 export const DeratingTables = {
@@ -274,7 +319,8 @@ export const DeratingTables = {
 
 export const MotorStartingMultipliers = {
   // Starting current as multiple of Full Load Current
-  DOL: { min: 6.0, max: 7.0, typical: 6.5 }, // Direct-on-line
+  // Updated to match project Excel workbook (11kV HT Cable sizing) which uses 7.2×FLC for motors
+  DOL: { min: 6.0, max: 7.2, typical: 7.2 }, // Direct-on-line (use workbook value)
   StarDelta: { min: 2.0, max: 3.0, typical: 2.5 }, // Star-Delta
   SoftStarter: { min: 2.0, max: 4.0, typical: 3.0 }, // Electronic soft starter
   VFD: { min: 1.0, max: 1.2, typical: 1.1 } // Variable frequency drive
@@ -282,6 +328,14 @@ export const MotorStartingMultipliers = {
 
 /**
  * SECTION 5: VOLTAGE DROP LIMITS (IEC 60364)
+ * 
+ * Per IEC 60364 and project standards, the PERCENTAGE LIMITS apply regardless of system voltage:
+ * - 3% running for motors (at motor terminals)
+ * - 5% running for resistive loads
+ * - 10% starting for DOL motors (at motor terminals)
+ * 
+ * These limits work for both HT (6.6-33kV) and LV (230/400V) systems
+ * The absolute voltage drop (V) will differ by voltage ratio, but % limits remain the same
  */
 
 export const VoltageLimits = {
@@ -296,7 +350,7 @@ export const VoltageLimits = {
 
   // Starting voltage drop (motors only)
   starting: {
-    DOL: 0.15, // 15% max
+    DOL: 0.10, // 10% max (aligned with project workbook checks)
     StarDelta: 0.10, // 10% max
     SoftStarter: 0.10,
     VFD: 0.05 // VFD limits it

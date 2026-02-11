@@ -51,6 +51,9 @@ export interface CableSegment {
   maxShortCircuitCurrent?: number; // kA, for ISc check
   protectionClearingTime?: number; // seconds, for ISc calculation
   breakerType?: string; // Alias for protectionType (display name)
+  // UI/editor fields
+  selectedSize?: string; // e.g. '1R X 11kV X 3C X 240 Sqmm'
+  remarks?: string;
 }
 
 export interface PathAnalysisResult {
