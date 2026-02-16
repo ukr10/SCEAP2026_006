@@ -147,14 +147,31 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
 
     // Get engine calculations - PASS USER CATALOGUE TO ENGINE
     const engine = new CableSizingEngine_V2(userCatalogue);
-    // Derive default core configuration: MV (>= 1000V = 1kV) typically uses single-core (1C), LV 3-phase uses 3C
-    // NOTE: voltage is stored in V (after conversion from kV), so check >= 1000 (= 1kV)
-    const defaultCore: '1C' | '2C' | '3C' | '4C' = (cable.voltage >= 1000) ? '1C' : '3C';
     
-    // CRITICAL FIX: If cable.numberOfCores exists (from Excel upload), use it; otherwise use voltage-based default
-    // Cast to ensure type safety (3C+E is treated as 3C for results display)
-    const coreConfigFromData = ((cable.numberOfCores === '3C+E' ? '3C' : cable.numberOfCores) || defaultCore) as '1C' | '2C' | '3C' | '4C';
-    console.log(`[RESULTS] Cable ${cable.cableNumber}: voltage=${cable.voltage}V (${cable.voltage/1000}kV), data cores=${cable.numberOfCores}, using cores=${coreConfigFromData}`);
+    // VOLTAGE-BASED CORE DETERMINATION (NEVER user input!)
+    // =====================================================
+    // This is a CRITICAL DESIGN RULE that cannot be overridden:
+    // Number of cores is determined EXCLUSIVELY by voltage standards
+    // 
+    // Standards-based mapping:
+    // - 11 kV, 6.6 kV, 3.3 kV → 1C (single-core cables per IEC 60502)
+    // - 0.4 kV (415V) → 3C (3-phase copper per IS 732)
+    // - 0.23 kV (230V) → 3C (3-phase copper per IS 732)
+    //
+    // Cores should NEVER be predefined input because:
+    // ❌ If cores are input, cable sizing becomes meaningless
+    // ❌ User could specify 11kV with 3C (physically wrong)
+    // ❌ No way to verify standards compliance
+    // ✅ CORRECT: Voltage in → sizing engine → cores determined → cables selected
+    
+    const coresByVoltageStandard: '1C' | '2C' | '3C' | '4C' = (cable.voltage >= 1000) ? '1C' : '3C';
+    
+    // Log the determination for debugging
+    console.log(`[SIZING] Cable ${cable.cableNumber}: voltage=${cable.voltage}V (${cable.voltage/1000}kV) → cores=${coresByVoltageStandard} (determined by standard)`);
+    if (cable.numberOfCores) {
+      console.warn(`[SIZING] Ignoring user-specified cores "${cable.numberOfCores}" - using voltage-based cores: ${coresByVoltageStandard}`);
+    }
+
 
     const engineInput: CableSizingInputV2 = {
       loadType: feederType === 'M' ? 'Motor' : 'Feeder',
@@ -165,7 +182,7 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
       powerFactor: cable.powerFactor || 0.85,
       conductorMaterial: 'Cu',
       insulation: 'XLPE',
-      numberOfCores: userOverrides?.numberOfCores || coreConfigFromData,
+      numberOfCores: userOverrides?.numberOfCores || coresByVoltageStandard,
       installationMethod: (cable.installationMethod || 'Air') as 'Air' | 'Trench' | 'Duct',
       cableLength: cable.length || 0,
       ambientTemp: 40,
@@ -193,7 +210,7 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
     const startingVoltageDropCheck = feederType === 'M' ? (startingVoltageDrop_percent <= 10 ? 'YES' : 'NO') : 'NA';
 
     // SELECTED SIZE & DESIGNATION
-    const coreUsed = (engineResult.coreConfig || coreConfigFromData) as '1C' | '2C' | '3C' | '4C';
+    const coreUsed = (engineResult.coreConfig || coresByVoltageStandard) as '1C' | '2C' | '3C' | '4C';
     const designationRuns = `${selectedRuns}R`;
     const cableDesignation = `${designationRuns} X ${cable.voltage/1000}kV X ${coreUsed} X ${selectedSize} Sqmm`;
     const totalLength = (cable.length || 0) * selectedRuns;

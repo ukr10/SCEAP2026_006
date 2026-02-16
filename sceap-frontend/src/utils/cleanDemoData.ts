@@ -6,6 +6,29 @@
  * Use: Template testing and platform validation
  * 
  * ALL NON-ZERO LOADS - Proper calculations guaranteed
+ * 
+ * CRITICAL DESIGN NOTE:
+ * =====================
+ * 'Number of Cores' IS INTENTIONALLY NOT INCLUDED in user input data!
+ * 
+ * WHY:
+ * - Number of cores is determined exclusively by VOLTAGE during cable sizing
+ * - 11 kV systems → 1-core cables (single-phase feeders)
+ * - 6.6 kV systems → 1-core cables
+ * - 0.4 kV systems → 3-core cables (3-phase distribution)
+ * 
+ * If cores were predefined as input:
+ * ❌ Cable sizing calculations become meaningless
+ * ❌ User might define 11kV with 3C (physically impossible)
+ * ❌ No standards compliance checking
+ * ❌ Wrong cable selection in results
+ * 
+ * CORRECT WORKFLOW:
+ * 1. User uploads feeder data WITHOUT 'Number of Cores'
+ * 2. System reads Voltage from data
+ * 3. Sizing engine determines cores based on voltage standard
+ * 4. Cable size, derating, VD calculated for THAT core configuration
+ * 5. Results show CORRECTLY selected cores (output, not input)
  */
 
 export const CLEAN_DEMO_FEEDERS = [
@@ -21,7 +44,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 10,
     'Power Factor': 0.95,
     'Efficiency (%)': 98,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -41,7 +63,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 45,
     'Power Factor': 0.95,
     'Efficiency (%)': 97,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -61,7 +82,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 55,
     'Power Factor': 0.95,
     'Efficiency (%)': 94,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -81,7 +101,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 35,
     'Power Factor': 1.0,
     'Efficiency (%)': 100,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -101,7 +120,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 30,
     'Power Factor': 0.95,
     'Efficiency (%)': 96,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -123,7 +141,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 25,
     'Power Factor': 0.85,
     'Efficiency (%)': 92,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -143,7 +160,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 30,
     'Power Factor': 0.85,
     'Efficiency (%)': 91,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -163,7 +179,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 32,
     'Power Factor': 0.85,
     'Efficiency (%)': 90,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -185,7 +200,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 20,
     'Power Factor': 0.85,
     'Efficiency (%)': 92,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -205,7 +219,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 25,
     'Power Factor': 0.85,
     'Efficiency (%)': 92,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -225,7 +238,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 15,
     'Power Factor': 0.85,
     'Efficiency (%)': 91,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -247,7 +259,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 20,
     'Power Factor': 1.0,
     'Efficiency (%)': 100,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -267,7 +278,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 25,
     'Power Factor': 1.0,
     'Efficiency (%)': 100,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -287,7 +297,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 40,
     'Power Factor': 1.0,
     'Efficiency (%)': 100,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -309,7 +318,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 15,
     'Power Factor': 0.95,
     'Efficiency (%)': 96,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -329,7 +337,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 12,
     'Power Factor': 0.95,
     'Efficiency (%)': 96,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
@@ -349,7 +356,6 @@ export const CLEAN_DEMO_FEEDERS = [
     'Length (m)': 8,
     'Power Factor': 0.95,
     'Efficiency (%)': 98,
-    'Number of Cores': '3C',
     'Material': 'Cu',
     'Insulation': 'XLPE',
     'Installation Method': 'Air',
