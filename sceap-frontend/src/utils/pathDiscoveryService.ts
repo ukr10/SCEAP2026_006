@@ -168,11 +168,23 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
     })
     .map((feeder: any) => {
       // Helper to safely get numeric values with fallback
+      // - Extracts the first numeric token from strings like "11 kV", "6.6kV", "415V"
+      // - Accepts decimals and negative signs
       const getNumber = (value: any, fallback = 0): number => {
         if (value === null || value === undefined || value === '') return fallback;
-        const trimmed = String(value).trim().replace('%', '').replace(',', '').trim();
-        const n = Number(trimmed);
-        return Number.isFinite(n) ? n : fallback;
+        const s = String(value).trim();
+        // Try direct numeric parse first (handles plain numbers)
+        const direct = Number(s.replace(/,/g, ''));
+        if (Number.isFinite(direct)) return direct;
+        // Otherwise extract first numeric substring
+        const m = s.match(/-?\d+(?:[\.,]\d+)?/);
+        if (m) {
+          // Normalize comma decimal to dot
+          const token = m[0].replace(',', '.');
+          const parsed = Number(token);
+          if (Number.isFinite(parsed)) return parsed;
+        }
+        return fallback;
       };
 
       // Helper to safely get string values
@@ -197,13 +209,18 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
 
       // Get voltage for phase detection
       const voltageRaw = getColumnValue(feeder, 'Voltage (V)', 'Voltage', 'V (V)', 'V', 'voltage (v)', 'rated voltage', 'nominal voltage');
+      // Parse numeric part first
       let voltage = getNumber(voltageRaw, 415);
-      
-      // CRITICAL FIX: Excel typically stores voltage in kV (11, 6.6, 0.23)
-      // Platform expects V (11000, 6600, 230)
-      // Auto-detect: if voltage < 100 and > 0, assume it's in kV and convert to V
-      if (voltage > 0 && voltage < 100) {
-        voltage = voltage * 1000; // Convert kV to V
+
+      // If the original raw value contains 'k' or 'kv' (case-insensitive), treat it as kV
+      if (voltageRaw && typeof voltageRaw === 'string' && /k\s?v/i.test(String(voltageRaw))) {
+        // e.g., '11 kV', '6.6kV' -> numeric part parsed above, convert to V
+        if (voltage > 0 && voltage < 100000) voltage = voltage * 1000;
+      } else {
+        // Fallback heuristic: if numeric value looks like kV (small number < 100), convert
+        if (voltage > 0 && voltage < 100) {
+          voltage = voltage * 1000; // Convert kV to V
+        }
       }
       
       // DEBUG: Log voltage extraction
@@ -326,25 +343,16 @@ export const discoverPathsToTransformer = (cables: CableSegment[]): CablePath[] 
     allBuses.add(toKey);
   });
 
-  // STEP 2: Identify transformer (root = toBus that is never a fromBus, OR named with 'TRF')
-  let transformer: CableSegment | null = null;
-  
-  // Try 1: Find equipment whose cable's toBus is never a fromBus (top-level)
+  // STEP 2: Identify candidate root/top-level buses.
+  // Do not assume a single transformer; treat dead-ends (no parent) or top-level buses
+  // as roots for individual paths so all paths are discovered.
   const cableFromBuses = new Set(cables.map(c => normalizeBus(c.fromBus)));
   const cableToBuses = new Set(cables.map(c => normalizeBus(c.toBus)));
   const topLevelBuses = Array.from(cableToBuses).filter(b => !cableFromBuses.has(b));
-  
   if (topLevelBuses.length > 0) {
-    // Find first cable going TO a top-level bus (this is the "incomer" to transformer)
-    const transformerToBusNorm = topLevelBuses[0];
-    transformer = cables.find(c => normalizeBus(c.toBus) === transformerToBusNorm) || null;
-    console.log(`[PATH DISCOVERY] Transformer identified: toBus=${transformer?.toBus}`);
-  }
-
-  if (!transformer) {
-    console.error('[PATH DISCOVERY] CRITICAL: Could not identify transformer/root bus');
-    console.error('Expected: At least one cable with toBus that has no other cable feeding FROM it');
-    return [];
+    console.log(`[PATH DISCOVERY] Top-level buses identified: ${topLevelBuses.join(', ')}`);
+  } else {
+    console.log('[PATH DISCOVERY] No explicit top-level buses found; will treat dead-ends as roots');
   }
 
   // STEP 3: For EACH cable originating from a load (leaf node), trace backward to transformer
@@ -359,10 +367,10 @@ export const discoverPathsToTransformer = (cables: CableSegment[]): CablePath[] 
 
   console.log(`[PATH DISCOVERY] Found ${endLoadCables.length} end-load cables out of ${cables.length} total cables`);
 
-  // Trace back each end-load to transformer
+  // Trace back each end-load to a root (dead-end or top-level bus)
   for (const startCable of endLoadCables) {
-    const pathCables = traceBackToTransformer(startCable, cables, normalizeBus, transformer);
-    
+    const pathCables = traceBackToTransformer(startCable, cables, normalizeBus);
+
     if (pathCables && pathCables.length > 0) {
       const totalDistance = pathCables.reduce((sum, c) => sum + c.length, 0);
       const totalVoltage = pathCables[0]?.voltage || 415;
@@ -375,12 +383,14 @@ export const discoverPathsToTransformer = (cables: CableSegment[]): CablePath[] 
       }, 0);
       const voltageDropPercent = totalVoltage > 0 ? (totalVdrop / totalVoltage) * 100 : 0;
 
+      // Determine root bus for this path from the last cable in the traced path
+      const pathRootBus = pathCables[pathCables.length - 1]?.toBus || 'UNKNOWN';
       const path: CablePath = {
         pathId: `PATH-${String(pathIndex).padStart(3, '0')}`,
         startEquipment: startCable.fromBus,
         startEquipmentDescription: startCable.feederDescription,
         startPanel: startCable.fromBus,
-        endTransformer: transformer.toBus,
+        endTransformer: pathRootBus,
         cables: pathCables,
         totalDistance,
         totalVoltage,
@@ -420,8 +430,7 @@ export const discoverPathsToTransformer = (cables: CableSegment[]): CablePath[] 
 const traceBackToTransformer = (
   startCable: CableSegment,
   allCables: CableSegment[],
-  normalizeBus: (b: string) => string,
-  transformer: CableSegment
+  normalizeBus: (b: string) => string
 ): CableSegment[] => {
   const path: CableSegment[] = [startCable];
   let currentCable = startCable;
@@ -433,13 +442,6 @@ const traceBackToTransformer = (
   // Backward traverse: load's cable → find parent's cable → repeat until transformer
   while (iterations < MAX_ITERATIONS) {
     iterations++;
-
-    // Check if we've reached the transformer
-    if (normalizeBus(currentCable.toBus) === normalizeBus(transformer.toBus)) {
-      console.log(`[TRACE] Path complete: ${path.map(c => `${c.fromBus}→${c.toBus}`).join(' → ')}`);
-      return path;
-    }
-
     // Find the parent cable (cable where fromBus == current.toBus)
     const nextFromBusNorm = normalizeBus(currentCable.toBus);
     
@@ -453,9 +455,8 @@ const traceBackToTransformer = (
     const parentCable = allCables.find(c => normalizeBus(c.fromBus) === nextFromBusNorm);
     
     if (!parentCable) {
-      // Dead end - no parent cable found
-      // This means current.toBus is a terminal (possibly the transformer if not explicitly named)
-      console.log(`[TRACE] Reached end of hierarchy at: ${currentCable.toBus} (treating as transformer)`);
+      // Dead end - no parent cable found. Treat current.toBus as path root
+      console.log(`[TRACE] Reached end of hierarchy at: ${currentCable.toBus} (treated as root)`);
       break;
     }
 

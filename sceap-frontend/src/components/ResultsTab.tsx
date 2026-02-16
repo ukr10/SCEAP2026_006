@@ -286,7 +286,9 @@ const ResultsTab = () => {
   useEffect(() => {
     if (normalizedFeeders && normalizedFeeders.length > 0) {
       const generated = normalizedFeeders.map((cable, idx) => {
-        const feederType = cable.loadType === 'Transformer' ? 'F' : 'M';
+        // Map normalized loadType to feederType used by Excel formulas (M=Motor-type, F=Feeder/Transformer)
+        const lt = (cable.loadType || '').toString().toLowerCase();
+        const feederType = ['transformer', 'feeder'].includes(lt) ? 'F' : ['motor', 'pump', 'fan', 'compressor', 'heater'].includes(lt) ? 'M' : (lt === '' ? 'M' : 'F');
         const formulas = calculateExcelFormulas(cable, idx, feederType, catalogueData, userOverrides[idx]);
         return {
           slNo: idx + 1,

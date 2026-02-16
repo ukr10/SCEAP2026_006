@@ -217,27 +217,32 @@ class CableSizingEngine_V2 {
         result.drivingConstraint = 'Ampacity';
       }
 
-      // ========== STEP 11: Check if parallel runs needed (>300mm² Cu is impractical) ==========
-      const maxSingleCableSize = 300; // Cu threshold
-      if (result.selectedConductorArea > maxSingleCableSize && input.conductorMaterial === 'Cu') {
-        // Try 2 parallel runs
-        const sizePerRun = Math.ceil(result.selectedConductorArea / 2);
-        
-        // Re-check if this 2-run config passes all constraints
-        const catalogEntry = this.catalog[String(sizePerRun)];
-        if (catalogEntry && sizePerRun <= maxSingleCableSize) {
-          result.numberOfRuns = 2;
-          result.sizePerRun = sizePerRun;
-          
-          // Verify 2×cable passes ampacity (both run same current)
-          const method = input.installationMethod.toLowerCase() as 'air' | 'trench' | 'duct';
-          const ratingPerRun = catalogEntry[method];
-          const totalRating = ratingPerRun * 2;
-          
-          if (totalRating * result.deratingFactor >= result.fullLoadCurrent) {
-            // Valid 2-run solution
+      // ========== STEP 11: Determine parallel runs using standard CEILING(size / 240) ==========
+      // Integration spec: use 240mm² as base single-run practical limit.
+      // numberOfRuns = CEILING(selectedConductorArea / 240)
+      // Then sizePerRun = CEILING(selectedConductorArea / numberOfRuns)
+      if (input.conductorMaterial === 'Cu') {
+        const runs = Math.max(1, Math.ceil(result.selectedConductorArea / 240));
+        if (runs > 1) {
+          // Compute tentative per-run size
+          let sizePerRun = Math.ceil(result.selectedConductorArea / runs);
+
+          // Ensure per-run size exists in catalog; if not, try increasing runs until it fits or cap at 4
+          let finalRuns = runs;
+          let attempts = 0;
+          while ((!this.catalog[String(sizePerRun)] || sizePerRun > 240) && attempts < 3) {
+            finalRuns += 1;
+            sizePerRun = Math.ceil(result.selectedConductorArea / finalRuns);
+            attempts++;
+          }
+
+          const catalogEntry = this.catalog[String(sizePerRun)];
+          if (catalogEntry) {
+            result.numberOfRuns = finalRuns;
+            result.sizePerRun = sizePerRun;
+            result.warnings.push(`Parallel runs used: ${finalRuns}×${sizePerRun}mm² to achieve ${result.selectedConductorArea}mm² equivalent`);
+            // Update selectedConductorArea to per-run size for downstream calculations
             result.selectedConductorArea = sizePerRun;
-            result.warnings.push(`Parallel runs used: 2×${sizePerRun}mm² instead of single ${Math.max(...this.allSizes)}mm²`);
           }
         }
       }
