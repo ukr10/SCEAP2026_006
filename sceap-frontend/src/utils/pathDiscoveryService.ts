@@ -192,17 +192,26 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
         const coreMap: Record<number, '1C' | '2C' | '3C' | '3C+E' | '4C'> = { 1: '1C', 2: '2C', 3: '3C', 4: '4C' };
         numberOfCores = coreMap[ncValue] || '3C';
       }
+      // Note: If ncValue not found in labeled columns, defaults to '3C'
+      // This is fallback behavior when core config comes from voltage-based default instead
 
       // Get voltage for phase detection
       const voltageRaw = getColumnValue(feeder, 'Voltage (V)', 'Voltage', 'V (V)', 'V', 'voltage (v)', 'rated voltage', 'nominal voltage');
-      const voltage = getNumber(voltageRaw, 415);
+      let voltage = getNumber(voltageRaw, 415);
+      
+      // CRITICAL FIX: Excel typically stores voltage in kV (11, 6.6, 0.23)
+      // Platform expects V (11000, 6600, 230)
+      // Auto-detect: if voltage < 100 and > 0, assume it's in kV and convert to V
+      if (voltage > 0 && voltage < 100) {
+        voltage = voltage * 1000; // Convert kV to V
+      }
       
       // DEBUG: Log voltage extraction
       const cableNum = getString(getColumnValue(feeder, 'cableNumber', 'Cable Number', 'Cable No', 'Cable', 'Feeder', 'cable number', 'cable no', 'feeder id'), '');
       if (!voltageRaw) {
         console.log(`[NORMALIZEFEEDERS] Cable ${cableNum}: voltageRaw=undefined, using default 415`);
       } else {
-        console.log(`[NORMALIZEFEEDERS] Cable ${cableNum}: voltageRaw=${voltageRaw}, voltage=${voltage}`);
+        console.log(`[NORMALIZEFEEDERS] Cable ${cableNum}: voltageRaw=${voltageRaw}, converted to voltage=${voltage}V`);
       }
 
       return {
