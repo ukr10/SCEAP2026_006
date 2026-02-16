@@ -84,6 +84,10 @@ export interface CableSizingResult {
   installedRatingPerRun: number; // = catalogRating × K_total
   installedRatingTotal: number; // = installedRatingPerRun × numberOfRuns
   
+  // Conductor impedance (for external VD calculations)
+  cableResistance_90C_Ohm_km?: number; // R @ 90°C (Ω/km)
+  cableReactance_Ohm_km?: number; // X @ 50Hz (Ω/km)
+  
   // Actual voltage drop at selected size
   voltageDropRunning_percent: number;
   voltageDropRunning_volt: number;
@@ -249,6 +253,10 @@ class CableSizingEngine_V2 {
       result.installedRatingPerRun = result.catalogRatingPerRun * result.deratingFactor;
       result.installedRatingTotal = result.installedRatingPerRun * result.numberOfRuns;
       result.sizePerRun = result.selectedConductorArea;
+      
+      // Assign impedance values from conductor data
+      result.cableResistance_90C_Ohm_km = finalEntry.resistance_90C || 0;
+      result.cableReactance_Ohm_km = finalEntry.reactance || 0;
 
       // ========== STEP 13: Calculate actual voltage drop at final size ==========
       const vdropRunning = this.calculateVoltageDropRunning(result.fullLoadCurrent, finalEntry);

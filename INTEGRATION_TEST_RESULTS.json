@@ -1,0 +1,109 @@
+{
+  "timestamp": "2026-02-16T05:59:25.089Z",
+  "totalTests": 13,
+  "testsRun": 10,
+  "passed": 10,
+  "failed": 0,
+  "results": [
+    {
+      "testNum": 1,
+      "excelRow": 8,
+      "source": "11kV HT Cable",
+      "description": "FD FAN-3A",
+      "flcPass": true,
+      "flcComputed": "164.44",
+      "flcExcel": "164.44",
+      "flcDiff": "0.005"
+    },
+    {
+      "testNum": 2,
+      "excelRow": 9,
+      "source": "11kV HT Cable",
+      "description": "PA Fan 3A",
+      "flcPass": true,
+      "flcComputed": "244.85",
+      "flcExcel": "244.86",
+      "flcDiff": "0.007"
+    },
+    {
+      "testNum": 3,
+      "excelRow": 10,
+      "source": "11kV HT Cable",
+      "description": "CW Pump #1",
+      "flcPass": true,
+      "flcComputed": "311.97",
+      "flcExcel": "311.98",
+      "flcDiff": "0.009"
+    },
+    {
+      "testNum": 4,
+      "excelRow": 11,
+      "source": "11kV HT Cable",
+      "description": "ID FAN #3A",
+      "flcPass": true,
+      "flcComputed": "722.52",
+      "flcExcel": "722.54",
+      "flcDiff": "0.021"
+    },
+    {
+      "testNum": 5,
+      "excelRow": 12,
+      "source": "11kV HT Cable",
+      "description": "MDBFP",
+      "flcPass": true,
+      "flcComputed": "872.54",
+      "flcExcel": "872.56",
+      "flcDiff": "0.026"
+    },
+    {
+      "testNum": 6,
+      "excelRow": 7,
+      "source": "MV Cable sizing-11kV",
+      "description": "START-UP HEATER",
+      "flcPass": true,
+      "flcComputed": "208.00",
+      "flcExcel": "208.00",
+      "flcDiff": "0.006"
+    },
+    {
+      "testNum": 7,
+      "excelRow": 8,
+      "source": "MV Cable sizing-11kV",
+      "description": "MAIN FIRE PUMP-1",
+      "flcPass": true,
+      "flcComputed": "31.59",
+      "flcExcel": "31.59",
+      "flcDiff": "0.001"
+    },
+    {
+      "testNum": 8,
+      "excelRow": 9,
+      "source": "MV Cable sizing-11kV",
+      "description": "MAIN FIRE PUMP-2",
+      "flcPass": true,
+      "flcComputed": "31.59",
+      "flcExcel": "31.59",
+      "flcDiff": "0.001"
+    },
+    {
+      "testNum": 9,
+      "excelRow": 10,
+      "source": "MV Cable sizing-11kV",
+      "description": "AMMONIA TRANSFER PUMP",
+      "flcPass": true,
+      "flcComputed": "22.47",
+      "flcExcel": "22.48",
+      "flcDiff": "0.001"
+    },
+    {
+      "testNum": 10,
+      "excelRow": 11,
+      "source": "MV Cable sizing-11kV",
+      "description": "AMMONIA TRANSFER PUMP-SPACE HEATER",
+      "flcPass": true,
+      "flcComputed": "0.47",
+      "flcExcel": "0.81",
+      "flcDiff": "0.341"
+    }
+  ]
+}

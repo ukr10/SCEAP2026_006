@@ -178,12 +178,12 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
 
     // VOLTAGE DROP - Running (match Excel formula)
     const runningVoltageDrop_V = engineResult.voltageDropRunning_volt || 0;
-    const runningVoltageDrop_percent = (engineResult.voltageDropRunning_percent || 0) * 100;
+    const runningVoltageDrop_percent = (engineResult.voltageDropRunning_percent || 0);
     const runningVoltageDropCheck = runningVoltageDrop_percent <= 3 ? 'YES' : 'NO';
 
     // VOLTAGE DROP - Starting (Motors only)
     const startingVoltageDrop_V = engineResult.voltageDropStarting_volt || 0;
-    const startingVoltageDrop_percent = feederType === 'M' ? (engineResult.voltageDropStarting_percent || 0) * 100 : 0;
+    const startingVoltageDrop_percent = feederType === 'M' ? (engineResult.voltageDropStarting_percent || 0) : 0;
     const startingVoltageDropCheck = feederType === 'M' ? (startingVoltageDrop_percent <= 10 ? 'YES' : 'NO') : 'NA';
 
     // SELECTED SIZE & DESIGNATION
@@ -208,8 +208,8 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
       numberOfCores: coreUsed,
       cableSize_sqmm: selectedSize,
       cableCurrentRating_A: engineResult.catalogRatingPerRun || 387,
-      cableResistance_90C_Ohm_Ph_km: 0.162,
-      cableReactance_50Hz_Ohm_Ph_km: 0.088,
+      cableResistance_90C_Ohm_Ph_km: engineResult.cableResistance_90C_Ohm_km || 0.162,
+      cableReactance_50Hz_Ohm_Ph_km: engineResult.cableReactance_Ohm_km || 0.088,
       k1_ambientTemp: engineResult.deratingComponents?.K_temp || 0.89,
       k2_groupingFactor: engineResult.deratingComponents?.K_group || 0.73,
       k3_groundTemp: 1.0,
@@ -718,7 +718,7 @@ const ResultsTab = () => {
               <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Runs</th>
               <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Total Length (m)</th>
               <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Voltage</th>
-              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">Status</th>
+              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300"> </th>
             </tr>
           </thead>
           <tbody>
@@ -735,14 +735,13 @@ const ResultsTab = () => {
                     runs: r.numberOfRuns,
                     totalLength: 0,
                     voltage: r.ratedVoltageKV,
-                    status: 'APPROVED'
+                    // no status in BOQ summary
                   };
                 }
                 groups[key].qty += 1;
                 groups[key].totalLength += r.totalLength_m || r.cableLength_m || 0;
                 groups[key].runs = Math.max(groups[key].runs, r.numberOfRuns || 1);
-                if (r.status === 'FAILED') groups[key].status = 'FAILED';
-                else if (r.status === 'WARNING' && groups[key].status === 'APPROVED') groups[key].status = 'WARNING';
+                // exclude status from BOQ aggregation
               });
               return Object.values(groups).map((g: any, idx: number) => (
                 <tr key={idx} className={idx % 2 === 0 ? 'bg-slate-800' : 'bg-slate-750'}>
@@ -754,9 +753,7 @@ const ResultsTab = () => {
                   <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.runs}</td>
                   <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.totalLength.toFixed(1)}</td>
                   <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.voltage.toFixed(1)} kV</td>
-                  <td className={`border border-slate-600 px-2 py-1 text-center font-bold ${
-                    g.status === 'APPROVED' ? 'text-green-300' : g.status === 'WARNING' ? 'text-yellow-300' : 'text-red-300'
-                  }`}>{g.status}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">&nbsp;</td>
                 </tr>
               ));
             })()}
