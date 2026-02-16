@@ -9,8 +9,13 @@ import ColumnMappingModal from './ColumnMappingModal';
 
 // Template generation function with SIMPLE, WORKING hierarchy
 const generateFeederTemplate = () => {
-  // Use CLEAN_DEMO_FEEDERS which matches both template and demo loader
-  const templateData = [...CLEAN_DEMO_FEEDERS];
+  // Use CLEAN_DEMO_FEEDERS but remove 'Number of Cores' from the template
+  const templateData = CLEAN_DEMO_FEEDERS.map(f => {
+    const copy: any = { ...f };
+    delete copy['Number of Cores'];
+    delete copy.numberOfCores;
+    return copy;
+  });
 
   // Create workbook and worksheet
   const wb = XLSX.utils.book_new();
@@ -28,7 +33,6 @@ const generateFeederTemplate = () => {
     { wch: 12 }, // Length (m)
     { wch: 13 }, // Power Factor
     { wch: 14 }, // Efficiency (%)
-    { wch: 15 }, // Number of Cores
     { wch: 10 }, // Material
     { wch: 12 }, // Insulation
     { wch: 18 }, // Installation Method
@@ -78,11 +82,7 @@ const generateFeederTemplate = () => {
       'REQUIRED': 'Optional',
       'Description': 'Equipment efficiency percentage (0-100%, default 95% for motors)'
     },
-    { 
-      'FIELD': 'Number of Cores',
-      'REQUIRED': 'YES',
-      'Description': '1C, 2C, 3C (most common), or 4C depending on supply type'
-    },
+    // 'Number of Cores' intentionally omitted from feeder template: determined by sizing engine after upload
     { 
       'FIELD': 'Material',
       'REQUIRED': 'YES',
@@ -483,7 +483,7 @@ const SizingTab = () => {
           };
 
           // Read ALL sheets from the workbook
-          const allSheetsData: Record<string, CableCatalogue[]> = {};
+          const allSheetsData: Record<string, any> = {};
           let firstSheetName = '3C'; // Default if nothing else found
 
           workbook.SheetNames.forEach((sheetName) => {

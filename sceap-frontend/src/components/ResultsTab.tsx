@@ -147,6 +147,9 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
 
     // Get engine calculations - PASS USER CATALOGUE TO ENGINE
     const engine = new CableSizingEngine_V2(userCatalogue);
+    // Derive default core configuration: MV (>=1kV) typically uses single-core (1C), LV 3-phase uses 3C
+    const defaultCore: '1C' | '2C' | '3C' | '4C' = (cable.voltage >= 1000) ? '1C' : '3C';
+
     const engineInput: CableSizingInputV2 = {
       loadType: feederType === 'M' ? 'Motor' : 'Feeder',
       ratedPowerKW: cable.loadKW,
@@ -156,7 +159,7 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
       powerFactor: cable.powerFactor || 0.85,
       conductorMaterial: 'Cu',
       insulation: 'XLPE',
-      numberOfCores: userOverrides?.numberOfCores || (cable.numberOfCores as '1C' | '2C' | '3C' | '4C') || '3C',
+      numberOfCores: userOverrides?.numberOfCores || defaultCore,
       installationMethod: (cable.installationMethod || 'Air') as 'Air' | 'Trench' | 'Duct',
       cableLength: cable.length || 0,
       ambientTemp: 40,
@@ -184,9 +187,10 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
     const startingVoltageDropCheck = feederType === 'M' ? (startingVoltageDrop_percent <= 10 ? 'YES' : 'NO') : 'NA';
 
     // SELECTED SIZE & DESIGNATION
-    const designationRuns = selectedRuns === 1 ? `${selectedRuns}R` : `${selectedRuns}R`;
-    const cableDesignation = `${designationRuns} X ${cable.voltage/1000}kV X ${userOverrides?.numberOfCores || cable.numberOfCores} X ${selectedSize} Sqmm`;
-    const totalLength = (cable.numberOfCores === '4C' || userOverrides?.numberOfCores === '4C') ? 3 * cable.length * selectedRuns : cable.length * selectedRuns;
+    const coreUsed = (engineResult.coreConfig || engineInput.numberOfCores || defaultCore) as '1C' | '2C' | '3C' | '4C';
+    const designationRuns = `${selectedRuns}R`;
+    const cableDesignation = `${designationRuns} X ${cable.voltage/1000}kV X ${coreUsed} X ${selectedSize} Sqmm`;
+    const totalLength = (cable.length || 0) * selectedRuns;
 
     // STATUS - Determine based on electrical checks
     let status: 'APPROVED' | 'WARNING' | 'FAILED' = 'APPROVED';
@@ -201,7 +205,7 @@ const calculateExcelFormulas = (cable: CableSegment, idx: number, feederType: 'M
       scCurrentSwitchboard_kA,
       scCurrentWithstandDuration_Sec: scWithstandDuration_Sec,
       minSizeShortCircuit_sqmm: minSizeShortCircuit,
-      numberOfCores: userOverrides?.numberOfCores || (cable.numberOfCores as '1C' | '2C' | '3C' | '4C'),
+      numberOfCores: coreUsed,
       cableSize_sqmm: selectedSize,
       cableCurrentRating_A: engineResult.catalogRatingPerRun || 387,
       cableResistance_90C_Ohm_Ph_km: 0.162,
@@ -701,48 +705,61 @@ const ResultsTab = () => {
       {/* BOQ Summary Table - Cable Routing & Bill of Quantities */}
       <div className="mt-8 bg-slate-900 rounded-lg border-2 border-slate-600 overflow-x-auto">
         <div className="bg-slate-800 px-4 py-2 font-bold text-slate-200 border-b border-slate-700">
-          BILL OF QUANTITIES (BOQ) - CABLE SCHEDULE
+          BILL OF QUANTITIES (BOQ) - CABLE SCHEDULE (aggregated)
         </div>
         <table className="w-full text-xs border-collapse bg-slate-800">
           <thead className="bg-slate-700 sticky top-0">
             <tr>
               <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">SL</th>
-              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">Cable #</th>
-              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">Description</th>
-              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">From Bus</th>
-              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">To Bus</th>
+              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">Designation</th>
               <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Cores</th>
               <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Size (mm²)</th>
+              <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Qty</th>
               <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Runs</th>
-              <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Length (m)</th>
-              <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Insulation</th>
-              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">Designation</th>
-              <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">Voltage</th>
+              <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Total Length (m)</th>
+              <th className="border border-slate-600 px-2 py-1 text-center text-slate-300">Voltage</th>
               <th className="border border-slate-600 px-2 py-1 text-left text-slate-300">Status</th>
             </tr>
           </thead>
           <tbody>
-            {results.map((r, idx) => (
-              <tr key={idx} className={idx % 2 === 0 ? 'bg-slate-800' : 'bg-slate-750'}>
-                <td className="border border-slate-600 px-2 py-1 text-slate-200">{r.slNo}</td>
-                <td className="border border-slate-600 px-2 py-1 text-slate-200 font-mono">{r.cableNumber}</td>
-                <td className="border border-slate-600 px-2 py-1 text-slate-200 truncate">{r.description}</td>
-                <td className="border border-slate-600 px-2 py-1 text-slate-200 font-mono">{r.fromBus}</td>
-                <td className="border border-slate-600 px-2 py-1 text-slate-200 font-mono">{r.toBus}</td>
-                <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{r.numberOfCores}</td>
-                <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{r.cableSize_sqmm}</td>
-                <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{r.numberOfRuns}</td>
-                <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{r.cableLength_m.toFixed(1)}</td>
-                <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">XLPE</td>
-                <td className="border border-slate-600 px-2 py-1 text-slate-200 truncate text-xs">{r.cableDesignation}</td>
-                <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{r.ratedVoltageKV.toFixed(1)} kV</td>
-                <td className={`border border-slate-600 px-2 py-1 text-center font-bold ${
-                  r.status === 'APPROVED' ? 'text-green-300' :
-                  r.status === 'WARNING' ? 'text-yellow-300' :
-                  'text-red-300'
-                }`}>{r.status}</td>
-              </tr>
-            ))}
+            {(() => {
+              const groups: Record<string, any> = {};
+              results.forEach((r) => {
+                const key = `${r.cableDesignation}||${r.cableSize_sqmm}||${r.numberOfCores}||${r.ratedVoltageKV}`;
+                if (!groups[key]) {
+                  groups[key] = {
+                    designation: r.cableDesignation,
+                    cores: r.numberOfCores,
+                    size: r.cableSize_sqmm,
+                    qty: 0,
+                    runs: r.numberOfRuns,
+                    totalLength: 0,
+                    voltage: r.ratedVoltageKV,
+                    status: 'APPROVED'
+                  };
+                }
+                groups[key].qty += 1;
+                groups[key].totalLength += r.totalLength_m || r.cableLength_m || 0;
+                groups[key].runs = Math.max(groups[key].runs, r.numberOfRuns || 1);
+                if (r.status === 'FAILED') groups[key].status = 'FAILED';
+                else if (r.status === 'WARNING' && groups[key].status === 'APPROVED') groups[key].status = 'WARNING';
+              });
+              return Object.values(groups).map((g: any, idx: number) => (
+                <tr key={idx} className={idx % 2 === 0 ? 'bg-slate-800' : 'bg-slate-750'}>
+                  <td className="border border-slate-600 px-2 py-1 text-slate-200">{idx + 1}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-slate-200 truncate">{g.designation}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.cores}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.size}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.qty}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.runs}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.totalLength.toFixed(1)}</td>
+                  <td className="border border-slate-600 px-2 py-1 text-center text-slate-200">{g.voltage.toFixed(1)} kV</td>
+                  <td className={`border border-slate-600 px-2 py-1 text-center font-bold ${
+                    g.status === 'APPROVED' ? 'text-green-300' : g.status === 'WARNING' ? 'text-yellow-300' : 'text-red-300'
+                  }`}>{g.status}</td>
+                </tr>
+              ));
+            })()}
           </tbody>
         </table>
       </div>
