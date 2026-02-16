@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Download, AlertCircle, Edit2, RotateCcw, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import html2pdf from 'html2pdf.js';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { usePathContext } from '../context/PathContext';
 import { CableSegment } from '../utils/pathDiscoveryService';
 import CableSizingEngine_V2, { CableSizingInput as CableSizingInputV2 } from '../utils/CableSizingEngine_V2';
@@ -414,21 +415,135 @@ const ResultsTab = () => {
   };
 
   const handleExportPDF = () => {
-    const element = document.getElementById('results-table-export');
-    if (!element) {
-      alert('Could not generate PDF');
-      return;
-    }
+    // Create PDF with professional grouped column headers (matching Excel structure)
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as any;
+    
+    // Add title
+    doc.setFontSize(14);
+    doc.text('Cable Sizing Results Report', 14, 10);
+    
+    // Add metadata
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 16);
+    doc.text(`Total Cables: ${results.length} | Approved: ${results.filter(r => r.status === 'APPROVED').length}`, 14, 20);
+    
+    // Prepare data with proper grouping
+    const tableData = results.map((r) => [
+      // ID & ROUTING (6 cols: blue)
+      r.slNo.toString(),
+      r.cableNumber,
+      r.fromBus,
+      r.toBus,
+      r.description.substring(0, 20),
+      r.feederType,
+      
+      // LOAD (9 cols: cyan)
+      r.ratedPowerKW.toFixed(2),
+      r.ratedVoltageKV.toFixed(2),
+      r.powerFactor.toFixed(2),
+      (r.efficiency * 100).toFixed(0),
+      r.flc_A.toFixed(2),
+      r.motorStartingCurrent_A.toFixed(2),
+      r.motorStartingPF.toFixed(2),
+      r.installation,
+      r.scCurrentSwitchboard_kA.toFixed(2),
+      
+      // SC WITHSTAND (4 cols: orange)
+      r.scCurrentWithstandDuration_Sec.toFixed(2),
+      r.minSizeShortCircuit_sqmm.toFixed(0),
+      'AIR',
+      r.numberOfCores,
+      
+      // CABLE DATA (6 cols: purple)
+      r.cableSize_sqmm.toString(),
+      r.cableCurrentRating_A.toFixed(1),
+      r.cableResistance_90C_Ohm_Ph_km.toFixed(4),
+      r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4),
+      r.cableLength_m.toFixed(1),
+      r.k_total_deratingFactor.toFixed(3),
+      
+      // CAPACITY (9 cols: green)
+      r.derated_currentCarryingCapacity_A.toFixed(1),
+      r.numberOfRuns.toString(),
+      r.capacityCheck,
+      r.k1_ambientTemp.toFixed(3),
+      r.k2_groupingFactor.toFixed(3),
+      r.k3_groundTemp.toFixed(3),
+      r.k5_thermalResistivity.toFixed(3),
+      r.k4_depthOfLaying.toFixed(3),
+      r.capacityCheck === 'YES' ? '✓' : '⚠',
+      
+      // RUNNING V-DROP (3 cols: red)
+      r.runningVoltageDrop_V.toFixed(2),
+      r.runningVoltageDrop_percent.toFixed(2),
+      r.runningVoltageDrop_percent <= 3 ? '✓' : '⚠',
+      
+      // STARTING V-DIP (3 cols: yellow)
+      r.startingVoltageDip_V.toFixed(2),
+      r.startingVoltageDip_percent.toFixed(2),
+      r.startingVoltageDip_percent <= 5 ? '✓' : '⚠',
+      
+      // REMARKS (3 cols: gray)
+      r.cableDesignation,
+      r.remarks.substring(0, 30),
+      r.status
+    ]);
 
-    const opt = {
-      margin: 5,
-      filename: `cable_sizing_results_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { orientation: 'landscape' as const, unit: 'mm', format: 'a4' }
-    };
+    // Create table with grouped headers using autoTable
+    autoTable(doc, {
+      startY: 24,
+      head: [
+        // Header Row 1: Column Groups
+        [
+          {content: 'ID & ROUTING', colSpan: 6, halign: 'center', fillColor: [25, 25, 112], textColor: [173, 216, 230]} as any,
+          {content: 'LOAD', colSpan: 9, halign: 'center', fillColor: [0, 50, 100], textColor: [175, 238, 238]} as any,
+          {content: 'SC WITHSTAND', colSpan: 4, halign: 'center', fillColor: [100, 50, 0], textColor: [255, 165, 0]} as any,
+          {content: 'CABLE DATA', colSpan: 6, halign: 'center', fillColor: [50, 0, 100], textColor: [218, 112, 214]} as any,
+          {content: 'CAPACITY', colSpan: 9, halign: 'center', fillColor: [0, 100, 0], textColor: [144, 238, 144]} as any,
+          {content: 'RUNNING V-DROP', colSpan: 3, halign: 'center', fillColor: [100, 0, 0], textColor: [255, 99, 71]} as any,
+          {content: 'STARTING V-DIP', colSpan: 3, halign: 'center', fillColor: [100, 100, 0], textColor: [255, 255, 0]} as any,
+          {content: 'REMARKS', colSpan: 3, halign: 'center', fillColor: [64, 64, 64], textColor: [211, 211, 211]} as any
+        ],
+        // Header Row 2: Field Names
+        [
+          'SL', 'Cable #', 'From', 'To', 'Desc', 'Type',
+          'kW', 'kV', 'PF', 'η%', 'FLC', 'I_m', 'PF_m', 'Inst', 'Isc',
+          't(s)', 'Sz', 'Meth', 'Core',
+          'Sz(mm²)', 'I(A)', 'R(Ω/km)', 'X(Ω/km)', 'L(m)', 'K_t',
+          'I_d(A)', 'Runs', 'OK', 'K1', 'K2', 'K3', 'K5', 'K4', 'Cap',
+          'ΔU(V)', '%ΔU', 'OK',
+          'ΔU(V)', '%ΔU', 'OK',
+          'Designation', 'Remarks', 'Status'
+        ]
+      ],
+      body: tableData,
+      styles: {
+        fontSize: 8,
+        cellPadding: 1.5,
+        valign: 'middle',
+        halign: 'center'
+      } as any,
+      headStyles: {
+        fontSize: 7,
+        fontStyle: 'bold',
+        cellPadding: 1,
+        valign: 'middle',
+        halign: 'center'
+      } as any,
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      },
+      didDrawPage: (data: any) => {
+        // Add page numbering
+        const pageSize = doc.internal.pageSize;
+        const pageCount = doc.getNumberOfPages();
+        const pageNum = data.pageNumber;
+        doc.setFontSize(7);
+        doc.text(`Page ${pageNum} of ${pageCount}`, pageSize.getWidth() - 20, pageSize.getHeight() - 5);
+      }
+    });
 
-    html2pdf().set(opt).from(element).save();
+    doc.save(`cable_sizing_results_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleSaveEdits = () => {
