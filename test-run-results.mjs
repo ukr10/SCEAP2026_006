@@ -1,10 +1,11 @@
 import { CLEAN_DEMO_FEEDERS } from './sceap-frontend/src/utils/cleanDemoData.js';
 import { normalizeFeeders } from './sceap-frontend/src/utils/pathDiscoveryService.js';
 import CableSizingEngine_V2 from './sceap-frontend/src/utils/CableSizingEngine_V2.js';
+import { AmpacityTables } from './sceap-frontend/src/utils/CableEngineeringData.js';
 
 const feeders = normalizeFeeders(CLEAN_DEMO_FEEDERS);
 
-const engine = new CableSizingEngine_V2();
+const engine = new CableSizingEngine_V2(AmpacityTables);
 
 console.log('\nRunning headless sizing for demo feeders...\n');
 let failed=0, warn=0, ok=0;

@@ -9,7 +9,7 @@
 import { CLEAN_DEMO_FEEDERS } from './sceap-frontend/src/utils/cleanDemoData.ts';
 import { normalizeFeeders, discoverPathsToTransformer } from './sceap-frontend/src/utils/pathDiscoveryService.ts';
 import CableSizingEngine_V2 from './sceap-frontend/src/utils/CableSizingEngine_V2.ts';
-import { LoadTypeSpecs } from './sceap-frontend/src/utils/CableEngineeringData.ts';
+import { LoadTypeSpecs, AmpacityTables } from './sceap-frontend/src/utils/CableEngineeringData.ts';
 
 console.log('\n' + '='.repeat(80));
 console.log('🔍 COMPREHENSIVE VERIFICATION TEST - SCEAP 2026');
@@ -44,7 +44,7 @@ console.log(`✓ Average V-drop: ${pathAnalysis.averageVoltageDrop.toFixed(2)}%`
 console.log('\n⚡ STEP 4: Cable Sizing Engine - All 17 Feeders');
 console.log('-'.repeat(80));
 
-const engine = new CableSizingEngine_V2();
+const engine = new CableSizingEngine_V2(AmpacityTables);
 let results = [];
 let statusSummary = { APPROVED: 0, WARNING: 0, FAILED: 0 };
 let vdropStats = { min: 100, max: 0, avg: 0 };

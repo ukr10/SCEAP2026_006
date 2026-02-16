@@ -379,44 +379,70 @@ const ResultsTab = () => {
   };
 
   const handleExportExcel = () => {
-    const exportData = results.map((r) => ({
-      'SL': r.slNo,
-      'Cable #': r.cableNumber,
-      'Description': r.description,
-      'From': r.fromBus,
-      'To': r.toBus,
-      'Type': r.feederType,
-      'Power(kW)': r.ratedPowerKW.toFixed(2),
-      'Voltage(kV)': r.ratedVoltageKV.toFixed(2),
-      'PF': r.powerFactor.toFixed(2),
-      'Efficiency': (r.efficiency * 100).toFixed(0),
-      'FLC(A)': r.flc_A.toFixed(2),
-      'I_motor(A)': r.motorStartingCurrent_A.toFixed(2),
-      'Cores': r.numberOfCores,
-      'Size(mm²)': r.cableSize_sqmm,
-      'Rating(A)': r.cableCurrentRating_A.toFixed(1),
-      'R(Ω/km)': r.cableResistance_90C_Ohm_Ph_km.toFixed(4),
-      'X(Ω/km)': r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4),
-      'Length(m)': r.cableLength_m.toFixed(1),
-      'K_total': r.k_total_deratingFactor.toFixed(3),
-      'I_derated(A)': r.derated_currentCarryingCapacity_A.toFixed(1),
-      'Runs': r.numberOfRuns,
-      'V-Drop%(Run)': r.runningVoltageDrop_percent.toFixed(2),
-      'V-Dip%(Start)': r.startingVoltageDip_percent.toFixed(2),
-      'Designation': r.cableDesignation,
-      'Remarks': r.remarks,
-      'Status': r.status,
-    }));
+    // Build grouped header rows then data rows
+    const groups = [
+      { name: 'ID & ROUTING', span: 6 },
+      { name: 'LOAD', span: 9 },
+      { name: 'SC WITHSTAND', span: 4 },
+      { name: 'CABLE DATA', span: 6 },
+      { name: 'CAPACITY', span: 9 },
+      { name: 'RUNNING V-DROP', span: 3 },
+      { name: 'STARTING V-DIP', span: 3 },
+      { name: 'REMARKS', span: 3 }
+    ];
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
-    XLSX.writeFile(workbook, `cable_sizing_results_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const fields = [
+      'SL','Cable #','From','To','Desc','Type',
+      'kW','kV','PF','η%','FLC','I_m','PF_m','Inst','Isc',
+      't(s)','Sz','Meth','Core',
+      'Sz(mm²)','I(A)','R(Ω/km)','X(Ω/km)','L(m)','K_t',
+      'I_d(A)','Runs','OK','K1','K2','K3','K5','K4','Cap',
+      'ΔU(V)','%ΔU','OK',
+      'ΔU(V)','%ΔU','OK',
+      'Designation','Remarks','Status'
+    ];
+
+    const headerRow1: any[] = [];
+    groups.forEach(g => {
+      headerRow1.push(g.name);
+      for (let i = 1; i < g.span; i++) headerRow1.push('');
+    });
+
+    const headerRow2 = fields;
+
+    const dataRows = results.map(r => [
+      r.slNo, r.cableNumber, r.fromBus, r.toBus, r.description, r.feederType,
+      r.ratedPowerKW.toFixed(2), r.ratedVoltageKV.toFixed(2), r.powerFactor.toFixed(2), (r.efficiency * 100).toFixed(0), r.flc_A.toFixed(2), r.motorStartingCurrent_A.toFixed(2), r.motorStartingPF.toFixed(2), r.installation, r.scCurrentSwitchboard_kA.toFixed(2),
+      r.scCurrentWithstandDuration_Sec.toFixed(2), r.minSizeShortCircuit_sqmm.toFixed(0), 'AIR', r.numberOfCores,
+      r.cableSize_sqmm, r.cableCurrentRating_A.toFixed(1), r.cableResistance_90C_Ohm_Ph_km.toFixed(4), r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4), r.cableLength_m.toFixed(1), r.k_total_deratingFactor.toFixed(3),
+      r.derated_currentCarryingCapacity_A.toFixed(1), r.numberOfRuns, r.capacityCheck, r.k1_ambientTemp.toFixed(3), r.k2_groupingFactor.toFixed(3), r.k3_groundTemp.toFixed(3), r.k5_thermalResistivity.toFixed(3), r.k4_depthOfLaying.toFixed(3), r.capacityCheck === 'YES' ? '✓' : '⚠',
+      r.runningVoltageDrop_V.toFixed(2), r.runningVoltageDrop_percent.toFixed(2), r.runningVoltageDrop_percent <= 3 ? '✓' : '⚠',
+      r.startingVoltageDip_V.toFixed(2), r.startingVoltageDip_percent.toFixed(2), r.startingVoltageDropCheck === 'YES' ? '✓' : '⚠',
+      r.cableDesignation, r.remarks, r.status
+    ]);
+
+    const aoa = [headerRow1, headerRow2, ...dataRows];
+    const worksheet = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Build merges to visually group headerRow1 spans
+    const merges: any[] = [];
+    let colIndex = 0;
+    groups.forEach(g => {
+      if (g.span > 1) {
+        merges.push({ s: { r:0, c:colIndex }, e: { r:0, c:colIndex + g.span - 1 } });
+      }
+      colIndex += g.span;
+    });
+    worksheet['!merges'] = merges;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, worksheet, 'Results');
+    XLSX.writeFile(wb, `cable_sizing_results_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const handleExportPDF = () => {
     // Create PDF with professional grouped column headers (matching Excel structure)
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as any;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a3' }) as any;
     
     // Add title
     doc.setFontSize(14);

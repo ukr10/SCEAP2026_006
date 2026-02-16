@@ -1,7 +1,8 @@
 import CableSizingEngine_V2 from '../src/utils/CableSizingEngine_V2.ts';
+import { AmpacityTables } from '../src/utils/CableEngineeringData.ts';
 
 (async () => {
-  const engine = new CableSizingEngine_V2();
+  const engine = new CableSizingEngine_V2(AmpacityTables);
 
   const pumpInput = {
     loadType: 'Pump',

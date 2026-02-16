@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import * as XLSX from 'xlsx';
 import { Upload, FileText, Calculator, Edit, Trash2, Loader2, Download, AlertCircle, CheckCircle } from 'lucide-react';
 import { normalizeFeeders, analyzeAllPaths, autoDetectColumnMappings } from '../utils/pathDiscoveryService';
+import { AmpacityTables } from '../utils/CableEngineeringData';
 import { usePathContext } from '../context/PathContext';
 import { CLEAN_DEMO_FEEDERS } from '../utils/cleanDemoData';
 import ColumnMappingModal from './ColumnMappingModal';
@@ -137,40 +138,34 @@ const generateFeederTemplate = () => {
 const generateCatalogTemplate = () => {
   const wb = XLSX.utils.book_new();
 
-  // Define core configs and their catalogs
+  // Prefer built-in AmpacityTables if available to populate realistic catalog values
   const coreConfigs = ['2C', '3C', '4C', '1C'];
-  const catalogSizes = [
-    { area: 2.5, air: 24, trench: 20, duct: 17, r90: 7.41, x: 0.165, dia: 7.9 },
-    { area: 4, air: 32, trench: 28, duct: 23, r90: 4.61, x: 0.16, dia: 9.9 },
-    { area: 6, air: 41, trench: 36, duct: 29, r90: 3.08, x: 0.156, dia: 11.5 },
-    { area: 10, air: 57, trench: 50, duct: 41, r90: 1.83, x: 0.149, dia: 14 },
-    { area: 16, air: 76, trench: 68, duct: 56, r90: 1.15, x: 0.144, dia: 16.5 },
-    { area: 25, air: 101, trench: 92, duct: 76, r90: 0.727, x: 0.139, dia: 19.2 },
-    { area: 35, air: 128, trench: 119, duct: 98, r90: 0.524, x: 0.136, dia: 21.6 },
-    { area: 50, air: 158, trench: 148, duct: 123, r90: 0.387, x: 0.133, dia: 24.1 },
-    { area: 70, air: 206, trench: 196, duct: 163, r90: 0.268, x: 0.13, dia: 27.5 },
-    { area: 95, air: 260, trench: 250, duct: 209, r90: 0.193, x: 0.128, dia: 31 },
-    { area: 120, air: 308, trench: 298, duct: 250, r90: 0.153, x: 0.127, dia: 34.5 },
-    { area: 150, air: 356, trench: 348, duct: 293, r90: 0.124, x: 0.125, dia: 37.6 },
-    { area: 185, air: 410, trench: 403, duct: 342, r90: 0.0991, x: 0.124, dia: 41 },
-    { area: 240, air: 489, trench: 485, duct: 415, r90: 0.0754, x: 0.122, dia: 45.7 },
-    { area: 300, air: 563, trench: 561, duct: 485, r90: 0.0605, x: 0.121, dia: 50.3 },
-    { area: 400, air: 666, trench: 667, duct: 582, r90: 0.0453, x: 0.12, dia: 56.3 }
-  ];
 
-  // Create a sheet for each core config
   coreConfigs.forEach(coreConfig => {
-    const data = catalogSizes.map(s => ({
-      'Size (mm²)': s.area,
-      'Number of Cores': coreConfig,
-      'Air Rating (A)': s.air,
-      'Trench Rating (A)': s.trench,
-      'Duct Rating (A)': s.duct,
-      'Resistance @ 90°C (Ω/km)': s.r90,
-      'Reactance (Ω/km)': s.x,
-      'Cable Diameter (mm)': s.dia
-    }));
-    
+    const table = (AmpacityTables as any)[coreConfig];
+    let data: any[] = [];
+
+    if (table && typeof table === 'object') {
+      data = Object.keys(table).map((size) => {
+        const entry = table[size];
+        return {
+          'Size (mm²)': Number(size),
+          'Number of Cores': coreConfig,
+          'Air Rating (A)': entry.air,
+          'Trench Rating (A)': entry.trench,
+          'Duct Rating (A)': entry.duct,
+          'Resistance @ 90°C (Ω/km)': entry.resistance_90C || entry.resistance || 0,
+          'Reactance (Ω/km)': entry.reactance || 0,
+          'Cable Diameter (mm)': entry.cableDia || entry.cableDia
+        };
+      }).sort((a,b) => a['Size (mm²)'] - b['Size (mm²)']);
+    } else {
+      // Fallback to a minimal static set if built-in table missing
+      data = [
+        { 'Size (mm²)': 16, 'Number of Cores': coreConfig, 'Air Rating (A)': 76, 'Trench Rating (A)': 68, 'Duct Rating (A)': 56, 'Resistance @ 90°C (Ω/km)': 1.15, 'Reactance (Ω/km)': 0.144, 'Cable Diameter (mm)': 16.5 }
+      ];
+    }
+
     const ws = XLSX.utils.json_to_sheet(data);
     ws['!cols'] = [
       { wch: 15 },

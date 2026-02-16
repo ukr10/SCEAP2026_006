@@ -4,9 +4,9 @@
  */
 
 import CableSizingEngine_V2 from './src/utils/CableSizingEngine_V2.js';
-import { LoadTypeSpecs } from './src/utils/CableEngineeringData.js';
+import { LoadTypeSpecs, AmpacityTables } from './src/utils/CableEngineeringData.js';
 
-const engine = new CableSizingEngine_V2();
+const engine = new CableSizingEngine_V2(AmpacityTables);
 
 // Test input for 37kW Fire Pump Motor with UPDATED clearing time
 const pumpInput = {
