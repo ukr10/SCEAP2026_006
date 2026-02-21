@@ -286,12 +286,6 @@ const ResultsTab = () => {
     setVisibleColumns(prev => ({ ...prev, [label]: !prev[label] }));
   };
 
-  // cell CSS generator respects visibility state
-  const cellClass = (label: string, extra = '') => {
-    const base = 'border border-slate-600 px-1 py-0.5';
-    return `${base} ${!visibleColumns[label] ? 'hidden' : ''} ${extra}`.trim();
-  };
-
   // Get available cable sizes from catalogue (if available)
   const getCableSizes = (): number[] => {
     if (catalogueData && typeof catalogueData === 'object') {
