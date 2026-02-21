@@ -35,8 +35,14 @@ const STANDARD_FIELDS = [
   { name: 'scDuration', label: 'SC Withstand Duration (sec)', examples: ['SC Withstand Duration', 'Duration (sec)'] },
   { name: 'numberOfLoadedCircuits', label: 'Grouped Loaded Circuits', examples: ['Grouped Loaded Circuits', 'Circuits', 'Groups'] },
   { name: 'noOfCores', label: 'Number of Cores', examples: ['No. of Cores', 'Cores'] },
+];
+
+const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
+  excelHeaders,
+  parsedRows,
+  onConfirm,
   onCancel,
-  detectedMappings
+  detectedMappings,
 }) => {
   const [mappings, setMappings] = useState<ColumnMappingConfig>(detectedMappings);
   const [showPreview, setShowPreview] = useState(false);
