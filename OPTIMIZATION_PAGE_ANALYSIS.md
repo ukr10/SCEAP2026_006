@@ -52,6 +52,17 @@ If user sees "1 cable mapping 3 equipments", this suggests a VISUALIZATION issue
 
 ## Recommended Fixes
 
+> **UPDATE:** The application has been modified to address many of these issues:
+> - Endpoint cables with identical `fromBus` values are now **grouped together** so parallel
+>   runs appear as a single path (see `parallelCount` / `originalCables`).
+> - `traceBackToTransformer()` stops automatically when a bus name begins with `TRF-`.
+> - UI has been enhanced to label parallel runs and clarify cable numbering.
+> - Path discovery emits extra console logs for debugging.
+> 
+> Please try uploading the same feeder list again; paths should now appear as expected.
+
+## Recommended Fixes
+
 ### 1. Verify Excel Data Structure
 Your Excel should follow this hierarchy:
 ```

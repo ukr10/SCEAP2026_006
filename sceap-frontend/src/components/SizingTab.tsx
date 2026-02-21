@@ -8,117 +8,94 @@ import { usePathContext } from '../context/PathContext';
 import { CLEAN_DEMO_FEEDERS } from '../utils/cleanDemoData';
 import ColumnMappingModal from './ColumnMappingModal';
 
-// Template generation function with SIMPLE, WORKING hierarchy
+// Template generation function – now mirrors the official workbook layout
 const generateFeederTemplate = () => {
-  // Use CLEAN_DEMO_FEEDERS but remove 'Number of Cores' from the template
-  const templateData = CLEAN_DEMO_FEEDERS.map(f => {
-    const copy: any = { ...f };
-    delete copy['Number of Cores'];
-    delete copy.numberOfCores;
-    return copy;
-  });
+  // Start from a skeleton object containing all input fields used in the "HT Cable" workbook
+  const templateData = [
+    {
+      'SL No': '',
+      'Description': '',
+      'Type of feeder': '',
+      'Rated power (kVA)': '',
+      'Rated power (kW)': '',
+      'Rated Voltage (kV)': '',
+      'Power factor': '',
+      'Efficiency (%)': '',
+      //'Cable Type (Cu/Al)': '', // removed – selected later on results page
+      'Motor starting current (A)': '',
+      'Motor starting PF': '',
+      'Short circuit current (kA)': '',
+      'SC withstand duration (sec)': '',
+      'Installation Method': '',
+      'Cable Length (m)': '',
+      'No. of Cores': '',
+      'Ambient Temp (°C)': '',
+      'Ground Temp (°C)': '',
+      'Depth of Laying (cm)': '',
+      'Derating Factor': '',
+      'Load KW': '',
+      'From Bus': '',
+      'To Bus': ''
+    }
+  ];
 
   // Create workbook and worksheet
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(templateData);
+  const ws = XLSX.utils.json_to_sheet(templateData, { skipHeader: false });
 
-  // Set column widths for better readability (matching CLEAN_DEMO_FEEDERS columns)
+  // Set column widths for readability
   const colWidths = [
-    { wch: 10 }, // Serial No
-    { wch: 14 }, // Cable Number
-    { wch: 28 }, // Feeder Description
-    { wch: 16 }, // From Bus
-    { wch: 16 }, // To Bus
-    { wch: 13 }, // Voltage (V)
-    { wch: 10 }, // Load KW
-    { wch: 12 }, // Length (m)
-    { wch: 13 }, // Power Factor
-    { wch: 14 }, // Efficiency (%)
-    { wch: 10 }, // Material
-    { wch: 12 }, // Insulation
+    { wch: 6 },  // SL No
+    { wch: 30 }, // Description
+    { wch: 18 }, // Type of feeder
+    { wch: 12 }, // Rated power (kVA)
+    { wch: 12 }, // Rated power (kW)
+    { wch: 12 }, // Rated Voltage (kV)
+    { wch: 12 }, // Power factor
+    { wch: 12 }, // Efficiency
+    { wch: 18 }, // Motor starting current
+    { wch: 18 }, // Motor starting PF
+    { wch: 18 }, // Short circuit current
+    { wch: 22 }, // SC withstand duration
     { wch: 18 }, // Installation Method
-    { wch: 15 }, // Starting Method
-    { wch: 15 }, // Protection Type
-    { wch: 12 }, // Load Type
-    { wch: 16 }  // Max SC Current (kA)
+    { wch: 12 }, // Cable Length
+    { wch: 12 }, // No. of Cores
+    { wch: 16 }, // Ambient Temp
+    { wch: 16 }, // Ground Temp
+    { wch: 16 }, // Depth of Laying
+    { wch: 14 }, // Derating Factor
+    { wch: 10 }, // Load KW
+    { wch: 14 }, // From Bus
+    { wch: 14 }  // To Bus
   ];
   ws['!cols'] = colWidths;
 
   XLSX.utils.book_append_sheet(wb, ws, 'Feeders');
 
-  // Create instructions sheet
+  // Create instructions sheet describing every input field in the template
   const instructionsData = [
-    { 
-      'FIELD': 'From Bus',
-      'REQUIRED': 'YES',
-      'Description': 'Bus where the cable load/destination is located (e.g., MOTOR-1, PUMP-X)'
-    },
-    { 
-      'FIELD': 'To Bus',
-      'REQUIRED': 'YES',
-      'Description': 'Bus where power comes from/source panel (e.g., MAIN-PANEL, HVAC-PANEL)'
-    },
-    { 
-      'FIELD': 'Load KW',
-      'REQUIRED': 'YES',
-      'Description': 'Actual power consumption in kilowatts (e.g., 37 for 37kW motor)'
-    },
-    { 
-      'FIELD': 'Voltage (V)',
-      'REQUIRED': 'YES',
-      'Description': 'Supply voltage in volts (typically 415V for 3-phase, 230V for single-phase)'
-    },
-    { 
-      'FIELD': 'Length (m)',
-      'REQUIRED': 'YES',
-      'Description': 'Cable run length in meters from source to load'
-    },
-    { 
-      'FIELD': 'Power Factor',
-      'REQUIRED': 'Optional',
-      'Description': 'Load power factor (0.85-0.95 for motors, 0.95-1.0 for resistive loads, default 0.85)'
-    },
-    { 
-      'FIELD': 'Efficiency',
-      'REQUIRED': 'Optional',
-      'Description': 'Equipment efficiency percentage (0-100%, default 95% for motors)'
-    },
-    // 'Number of Cores' intentionally omitted from feeder template: determined by sizing engine after upload
-    { 
-      'FIELD': 'Material',
-      'REQUIRED': 'YES',
-      'Description': 'Conductor material: Cu (Copper - recommended) or Al (Aluminum)'
-    },
-    { 
-      'FIELD': 'Insulation',
-      'REQUIRED': 'YES',
-      'Description': 'Cable insulation: XLPE (preferred) or PVC'
-    },
-    { 
-      'FIELD': 'Installation Method',
-      'REQUIRED': 'YES',
-      'Description': 'Air (cable tray), Trench (underground), or Duct (conduit)'
-    },
-    { 
-      'FIELD': 'Starting Method',
-      'REQUIRED': 'For Motors',
-      'Description': 'DOL (Direct), StarDelta, SoftStarter, or VFD'
-    },
-    { 
-      'FIELD': 'Protection Type',
-      'REQUIRED': 'YES',
-      'Description': 'ACB (main), MCCB (branch), MCB (circuits), or None'
-    },
-    { 
-      'FIELD': 'Load Type',
-      'REQUIRED': 'YES',
-      'Description': 'Motor, Pump, Compressor, Fan, Heater, Transformer, or Feeder'
-    },
-    { 
-      'FIELD': 'Max SC Current (kA)',
-      'REQUIRED': 'For ACB',
-      'Description': 'Short-circuit current in kiloamperes at the installation point'
-    }
+    { FIELD: 'SL No', REQUIRED: 'Optional', Description: 'Serial number / reference' },
+    { FIELD: 'Description', REQUIRED: 'Optional', Description: 'Load or equipment description' },
+    { FIELD: 'Type of feeder', REQUIRED: 'YES', Description: 'e.g., MOTOR, PUMP, TRANSFORMER, FEEDER' },
+    { FIELD: 'Rated power (kVA)', REQUIRED: 'Conditional', Description: 'Apparent power for transformer or motor' },
+    { FIELD: 'Rated power (kW)', REQUIRED: 'Conditional', Description: 'Real power for resistive loads' },
+    { FIELD: 'Rated Voltage (kV)', REQUIRED: 'YES', Description: 'Supply voltage; kV values are accepted (e.g., 0.415, 11)' },
+    { FIELD: 'Power factor', REQUIRED: 'Optional', Description: '0.7–0.99 for motors; default 0.85' },
+    { FIELD: 'Efficiency (%)', REQUIRED: 'Optional', Description: 'Equipment efficiency (default 95% for motors)' },
+    { FIELD: 'Motor starting current (A)', REQUIRED: 'Optional', Description: 'If known; otherwise calculated using 7.2×FLC for DOL motors' },
+    { FIELD: 'Motor starting PF', REQUIRED: 'Optional', Description: 'Power factor during motor starting' },
+    { FIELD: 'Short circuit current (kA)', REQUIRED: 'Optional', Description: 'Short‑circuit current at the switchboard for fault checks' },
+    { FIELD: 'SC withstand duration (sec)', REQUIRED: 'Optional', Description: 'Breaker clearing time for SC calculation' },
+    { FIELD: 'Installation Method', REQUIRED: 'YES', Description: 'Air, Trench, Duct, Ground etc.' },
+    { FIELD: 'Cable Length (m)', REQUIRED: 'YES', Description: 'Run length from parent to load' },
+    { FIELD: 'No. of Cores', REQUIRED: 'Optional', Description: '2C, 3C, 4C etc. (default assigned by engine if missing)' },
+    { FIELD: 'Ambient Temp (°C)', REQUIRED: 'Optional', Description: 'Ambient temperature for derating (default 40)' },
+    { FIELD: 'Ground Temp (°C)', REQUIRED: 'Optional', Description: 'Ground temperature for buried cables' },
+    { FIELD: 'Depth of Laying (cm)', REQUIRED: 'Optional', Description: 'Depth for buried cables' },
+    { FIELD: 'Derating Factor', REQUIRED: 'Optional', Description: 'Overall derating (K1×K2×K3×K4×K5) - leave blank to auto‑calculate' },
+    { FIELD: 'Load KW', REQUIRED: 'Optional', Description: 'Alternate power input field (used if kVA not provided)' },
+    { FIELD: 'From Bus', REQUIRED: 'YES', Description: 'Origin bus name (e.g., MAIN-PANEL)' },
+    { FIELD: 'To Bus', REQUIRED: 'YES', Description: 'Destination bus or equipment' }
   ];
 
   const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
@@ -134,65 +111,69 @@ const generateFeederTemplate = () => {
   XLSX.writeFile(wb, 'SCEAP_Demo_Template.xlsx');
 };
 
-// Generate Catalog Template with core configs
+// Generate Catalog Template with combined core configurations and derating info
 const generateCatalogTemplate = () => {
   const wb = XLSX.utils.book_new();
 
-  // Prefer built-in AmpacityTables if available to populate realistic catalog values
-  const coreConfigs = ['2C', '3C', '4C', '1C'];
+  // Build a single "Catalogue Aluminium" sheet containing all cores
+  const catalogRows: any[] = [];
+  const coreConfigs = ['1C','2C','3C','4C'];
 
   coreConfigs.forEach(coreConfig => {
     const table = (AmpacityTables as any)[coreConfig];
-    let data: any[] = [];
-
     if (table && typeof table === 'object') {
-      data = Object.keys(table).map((size) => {
+      Object.keys(table).forEach(size => {
         const entry = table[size];
-        return {
+        catalogRows.push({
+          'Core Config': coreConfig,
           'Size (mm²)': Number(size),
-          'Number of Cores': coreConfig,
           'Air Rating (A)': entry.air,
-          'Trench Rating (A)': entry.trench,
+          'Ground Rating (A)': entry.trench,
           'Duct Rating (A)': entry.duct,
           'Resistance @ 90°C (Ω/km)': entry.resistance_90C || entry.resistance || 0,
           'Reactance (Ω/km)': entry.reactance || 0,
-          'Cable Diameter (mm)': entry.cableDia || entry.cableDia
-        };
-      }).sort((a,b) => a['Size (mm²)'] - b['Size (mm²)']);
-    } else {
-      // Fallback to a minimal static set if built-in table missing
-      data = [
-        { 'Size (mm²)': 16, 'Number of Cores': coreConfig, 'Air Rating (A)': 76, 'Trench Rating (A)': 68, 'Duct Rating (A)': 56, 'Resistance @ 90°C (Ω/km)': 1.15, 'Reactance (Ω/km)': 0.144, 'Cable Diameter (mm)': 16.5 }
-      ];
+          'Cable Diameter (mm)': entry.cableDia || '',
+          'Material': 'Al', // default material for catalogue
+          'Derating K1 (Temp)': '',
+          'Derating K2 (Grouping)': '',
+          'Derating K3 (Ground Temp)': '',
+          'Derating K4 (Depth)': '',
+          'Derating K5 (Soil)':''
+        });
+      });
     }
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [
-      { wch: 15 },
-      { wch: 18 },
-      { wch: 15 },
-      { wch: 18 },
-      { wch: 15 },
-      { wch: 22 },
-      { wch: 18 },
-      { wch: 20 }
-    ];
-    XLSX.utils.book_append_sheet(wb, ws, coreConfig);
   });
 
-  // Add derating factors sheet
-  const deratingData = [
-    { Factor: 'Temperature', Method: 'Air', Value: 1.0, Description: 'Temperature factor for ambient' },
-    { Factor: 'Temperature', Method: 'Trench', Value: 0.9, Description: 'Temperature factor for buried' },
-    { Factor: 'Temperature', Method: 'Duct', Value: 0.95, Description: 'Temperature factor for duct' },
-    { Factor: 'Grouping', Circuits: 1, Factor_Value: 1.0, Description: '1 circuit' },
-    { Factor: 'Grouping', Circuits: 2, Factor_Value: 0.9, Description: '2 circuits' },
-    { Factor: 'Grouping', Circuits: 3, Factor_Value: 0.8, Description: '3 circuits' },
-    { Factor: 'Grouping', Circuits: 4, Factor_Value: 0.75, Description: '4 circuits' },
+  // Sort by cores then size
+  catalogRows.sort((a,b) => {
+    if (a['Core Config'] !== b['Core Config']) return coreConfigs.indexOf(a['Core Config']) - coreConfigs.indexOf(b['Core Config']);
+    return a['Size (mm²)'] - b['Size (mm²)'];
+  });
+
+  const ws = XLSX.utils.json_to_sheet(catalogRows, { header: [
+    'Core Config','Size (mm²)','Air Rating (A)','Ground Rating (A)','Duct Rating (A)',
+    'Resistance @ 90°C (Ω/km)','Reactance (Ω/km)','Cable Diameter (mm)','Material',
+    'Derating K1 (Temp)','Derating K2 (Grouping)','Derating K3 (Ground Temp)',
+    'Derating K4 (Depth)','Derating K5 (Soil)'
+  ]});
+
+  ws['!cols'] = [
+    { wch: 12 },{ wch: 12 },{ wch: 15 },{ wch: 15 },{ wch: 15 },
+    { wch: 20 },{ wch: 18 },{ wch: 20 },{ wch: 12 },
+    { wch: 15 },{ wch: 18 },{ wch: 18 },{ wch: 18 },{ wch: 16 }
   ];
-  
+  XLSX.utils.book_append_sheet(wb, ws, 'Catalogue Aluminium');
+
+  // Add derating factors sheet (more descriptive than before)
+  const deratingData = [
+    { Factor: 'Temperature (K1)', Description: 'Ambient temperature factor', 'Air': 0.90, 'Trench': 0.90, 'Duct': 0.80 },
+    { Factor: 'Grouping (K2)', Description: 'Number of circuits', '1': 1.00, '2': 0.95, '3': 0.90, '4': 0.85, '6': 0.80 },
+    { Factor: 'Ground Temp (K3)', Description: 'Ground temperature factor', 'Single': 0.96, 'Multi': 0.91 },
+    { Factor: 'Depth (K4)', Description: 'Depth of laying factor (cm)', '300': 1.0, '600': 0.95, '900': 0.90 },
+    { Factor: 'Soil Resistivity (K5)', Description: 'Thermal resistivity (K·m/W)', '1.2': 1.0, '2.0': 0.95 }
+  ];
   const wsDerat = XLSX.utils.json_to_sheet(deratingData);
-  wsDerat['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }];
+  wsDerat['!cols'] = [{ wch: 20 },{ wch: 50 },{ wch: 10 },{ wch: 10 },{ wch: 10 },{ wch: 10 },{ wch: 10 }];
   XLSX.utils.book_append_sheet(wb, wsDerat, 'Derating Factors');
 
   XLSX.writeFile(wb, 'CATALOG_TEMPLATE.xlsx');
@@ -206,10 +187,21 @@ interface FeederData {
 interface CableCatalogue {
   size: number;
   cores?: '1C' | '2C' | '3C' | '4C';
-  current: number;
+  current: number;                         // usually air rating
   resistance: number;
   reactance: number;
-  [key: string]: any;
+  material?: 'Al' | 'Cu';                 // conductor material, default from sheet name
+  cableDia?: number;
+  airRating?: number;
+  trenchRating?: number;
+  ductRating?: number;
+  // Optional derating factors provided with catalogue rows
+  deratingK1?: number;
+  deratingK2?: number;
+  deratingK3?: number;
+  deratingK4?: number;
+  deratingK5?: number;
+  [key: string]: any;                     // allow other properties for flexibility
 }
 
 // Professional Loading Component
@@ -495,10 +487,19 @@ const SizingTab = () => {
                 const current = getColValue(row, 'Current (A)', 'current', 'Current', 'Air Rating (A)', 'air', 'rating');
                 const resistance = getColValue(row, 'Resistance (Ω/km)', 'Resistance (Ohm/km)', 'resistance', 'Resistance @ 90°C (Ω/km)', 'R', 'resistance (ohm/km)');
                 const reactance = getColValue(row, 'Reactance (Ω/km)', 'Reactance (Ohm/km)', 'reactance', 'Reactance', 'X', 'reactance (ohm/km)');
-                
+
+                // additional fields
+                const coresRaw = getColValue(row, 'Core Config', 'Cores', 'No. of Cores', 'Core Configuration', 'Configuration', 'core config');
+                const materialRaw = getColValue(row, 'Material', 'Mat', 'Conductor Material');
+                const deratingK1 = getColValue(row, 'Derating K1 (Temp)', 'K1 (Temp)', 'Derating K1', 'K1');
+                const deratingK2 = getColValue(row, 'Derating K2 (Grouping)', 'K2', 'Derating K2');
+                const deratingK3 = getColValue(row, 'Derating K3 (Ground Temp)', 'K3', 'Derating K3');
+                const deratingK4 = getColValue(row, 'Derating K4 (Depth)', 'K4', 'Derating K4');
+                const deratingK5 = getColValue(row, 'Derating K5 (Soil)', 'K5', 'Derating K5');
+
                 // Only include if has size (required field)
                 if (size === undefined || size === '' || size === null) return null;
-                
+
                 // Safe number parsing
                 const parseNum = (val: any): number => {
                   if (val === undefined || val === null || val === '') return 0;
@@ -506,13 +507,32 @@ const SizingTab = () => {
                   const n = Number(trimmed);
                   return Number.isFinite(n) ? n : 0;
                 };
-                
+
+                // determine default material from sheet name if not provided
+                let material: 'Al' | 'Cu' | undefined = undefined;
+                if (materialRaw && typeof materialRaw === 'string') {
+                  const m = materialRaw.toString().toLowerCase();
+                  if (m.includes('cu')) material = 'Cu';
+                  else if (m.includes('al')) material = 'Al';
+                }
+                if (!material) {
+                  const lowerSheet = sheetName.toLowerCase();
+                  if (lowerSheet.includes('cu')) material = 'Cu';
+                  else if (lowerSheet.includes('al')) material = 'Al';
+                }
+
                 return {
                   size: parseNum(size),
                   current: parseNum(current),
                   resistance: parseNum(resistance),
                   reactance: parseNum(reactance),
-                  cores: sheetName as any
+                  cores: (coresRaw || sheetName) as any,
+                  material,
+                  deratingK1: parseNum(deratingK1),
+                  deratingK2: parseNum(deratingK2),
+                  deratingK3: parseNum(deratingK3),
+                  deratingK4: parseNum(deratingK4),
+                  deratingK5: parseNum(deratingK5)
                 };
               })
               .filter((item): item is CableCatalogue => item !== null && item.size > 0);
@@ -521,13 +541,14 @@ const SizingTab = () => {
               // Normalize to engine-expected structure: { '<size>': { air, trench, duct, resistance_90C, reactance, cableDia } }
               const sizesMap: Record<string, any> = {};
               mappedData.forEach((entry) => {
-                const air = entry.current || entry['Air Rating (A)'] || entry.air || entry.current || 0;
-                const trench = entry.trench || entry['Trench Rating (A)'] || entry.trenchRating || air;
-                const duct = entry.duct || entry['Duct Rating (A)'] || entry.ductRating || air;
+                const air = entry.current || entry.airRating || entry['Air Rating (A)'] || 0;
+                const trench = entry.trench || entry.trenchRating || entry['Trench Rating (A)'] || air;
+                const duct = entry.duct || entry.ductRating || entry['Duct Rating (A)'] || air;
                 const resistance90 = entry.resistance_90C || entry.resistance || entry['Resistance @ 90°C (Ω/km)'] || entry.R || 0;
                 const reactance = entry.reactance || entry.X || entry['Reactance (Ω/km)'] || 0;
                 const cableDia = entry.dia || entry['Cable Diameter (mm)'] || entry.cableDia || 0;
 
+                // propagate extra metadata as-is so downstream components can access them
                 sizesMap[String(entry.size)] = {
                   air,
                   trench,
@@ -535,6 +556,13 @@ const SizingTab = () => {
                   resistance_90C: resistance90,
                   reactance,
                   cableDia,
+                  material: entry.material,
+                  cores: entry.cores,
+                  deratingK1: entry.deratingK1,
+                  deratingK2: entry.deratingK2,
+                  deratingK3: entry.deratingK3,
+                  deratingK4: entry.deratingK4,
+                  deratingK5: entry.deratingK5
                 };
               });
 
@@ -598,8 +626,25 @@ const SizingTab = () => {
 
   const handleRunSizing = async () => {
     setIsCalculating(true);
-    // Implementation will be added
-    setTimeout(() => setIsCalculating(false), 2000);
+    // force a recalculation even if feed data hasn't changed
+    if (feederData.length > 0) {
+      recomputeAnalysis(feederData);
+    }
+    // simulate a moment for UI
+    setTimeout(() => setIsCalculating(false), 500);
+  };
+
+  // helper used whenever feederData is modified to recalc paths & normalized data
+  const recomputeAnalysis = (feeders: FeederData[]) => {
+    const normalized = normalizeFeeders(feeders);
+    const analysis = analyzeAllPaths(normalized);
+    setPathAnalysis(analysis);
+    setContextPathAnalysis(analysis);
+    setContextNormalizedFeeders(normalized);
+    setOriginalFeeders([...normalized]);
+    console.log('[RECOMPUTE] Analysis updated after feeder change');
+    console.log(`  • ${feeders.length} feeders processed`);
+    console.log(`  • ${analysis.totalPaths} paths discovered (${analysis.validPaths} valid)`);
   };
 
   const handleColumnMappingConfirm = (mappings: Record<string, string | null>) => {
@@ -626,24 +671,20 @@ const SizingTab = () => {
 
     console.log('[COLUMN MAPPING] Remapped feeders (first row):', remappedFeeders[0]);
 
-    // Normalize feeders using expanded column matching
-    const normalizedFeeders = normalizeFeeders(remappedFeeders);
-    
-    console.log('[NORMALIZATION] Normalized feeders (first 3):', normalizedFeeders.slice(0, 3));
-    console.log('[NORMALIZATION] Load kW values:', normalizedFeeders.map(f => ({ cable: f.cableNumber, loadKW: f.loadKW })));
-    
-    const analysis = analyzeAllPaths(normalizedFeeders);
-
+    // store remapped rows and headers for display/editing
     setFeederData(remappedFeeders);
     setFeederHeaders(rawExcelHeaders);
-    setPathAnalysis(analysis);
-    setContextPathAnalysis(analysis);
-    setContextNormalizedFeeders(normalizedFeeders); // Store normalized feeders for Results page
-    setOriginalFeeders([...normalizedFeeders]); // Store original for revert
 
-    console.log(`✓ Processed ${remappedFeeders.length} feeders`);
-    console.log(`✓ Discovered ${analysis.totalPaths} paths`);
-    console.log(`✓ Valid paths: ${analysis.validPaths}`);
+    // perform initial analysis
+    recomputeAnalysis(remappedFeeders);
+
+    // sanity validation
+    const normalizedFeeders = normalizeFeeders(remappedFeeders);
+    const bad = normalizedFeeders.filter(f => !f.fromBus || !f.toBus || f.loadKW === 0);
+    if (bad.length > 0) {
+      console.warn('[VALIDATION] Some feeders appear incomplete:', bad.slice(0,3));
+      alert(`Warning: ${bad.length} feeders missing from‑bus/to‑bus or load.\nCheck your mapping or feeder list.`);
+    }
   };
 
   const handleColumnMappingCancel = () => {
@@ -667,6 +708,24 @@ const SizingTab = () => {
   const handleDelete = (id: number) => {
     setFeederData(prev => prev.filter(item => item.id !== id));
   };
+
+  // add a blank row at the end for user to quickly append feeders
+  const addEmptyRow = () => {
+    const nextId = feederData.length > 0 ? Math.max(...feederData.map(f => f.id)) + 1 : 1;
+    const empty: any = { id: nextId };
+    feederHeaders.forEach(h => {
+      empty[h] = '';
+    });
+    setFeederData(prev => [...prev, empty]);
+    setEditingRow(nextId);
+  };
+
+  // whenever feederData changes (edit/delete/add), update the analysis automatically
+  useEffect(() => {
+    if (feederData.length > 0) {
+      recomputeAnalysis(feederData);
+    }
+  }, [feederData]);
 
   // Build catalogue: use KEC standard as default with proper per-core data
   // Import KEC at top of file for different ampacity ratings per core config
@@ -949,15 +1008,26 @@ const SizingTab = () => {
                 <p className="text-sm text-slate-400 mt-1">
                   {feederData.length} rows × {feederHeaders.length} columns
                 </p>
+                <p className="text-xs text-slate-500 mt-1 italic">
+                  Edits update automatically – paths and voltage drop recalc in real time.
+                </p>
               </div>
-              <button
-                onClick={handleRunSizing}
-                disabled={isCalculating}
-                className="bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
-              >
-                <Calculator size={20} />
-                {isCalculating ? 'Calculating...' : 'Run Cable Sizing Engine'}
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={addEmptyRow}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg flex items-center gap-1 text-sm"
+                >
+                  + Add Row
+                </button>
+                <button
+                  onClick={handleRunSizing}
+                  disabled={isCalculating}
+                  className="bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg flex items-center gap-2 font-medium"
+                >
+                  <Calculator size={20} />
+                  {isCalculating ? 'Calculating...' : 'Run Cable Sizing Engine'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -976,6 +1046,10 @@ const SizingTab = () => {
                         {header || `Column ${index + 1}`}
                       </th>
                     ))}
+                    {/* computed value column */}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider whitespace-nowrap bg-slate-700" style={{ minWidth: '120px' }}>
+                      Load kW
+                    </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider whitespace-nowrap bg-slate-700 sticky right-0">
                       Actions
                     </th>
@@ -1007,6 +1081,13 @@ const SizingTab = () => {
                           )}
                         </td>
                       ))}
+                      {/* computed loadKW cell */}
+                      <td className="px-4 py-4 text-sm text-slate-300 whitespace-nowrap" style={{ minWidth: '120px' }}>
+                        {(() => {
+                          const rowNorm = normalizeFeeders([feeder]);
+                          return rowNorm[0]?.loadKW?.toFixed(2) || '';
+                        })()}
+                      </td>
                       <td className="px-4 py-4 text-sm font-medium whitespace-nowrap sticky right-0 bg-slate-800">
                         <button
                           onClick={() => handleEdit(feeder.id)}

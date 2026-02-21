@@ -279,6 +279,13 @@ const deratedAmpacity = baseAmpacity * derating;
 //     reactance: [...],
 //     ampacity_air: ...,
 //     ampacity_trench: ...,
+//     material: 'Al' | 'Cu',          // conductor material if provided or inferred
+//     cores: '1C'|'2C'|'3C'|'4C',     // core configuration
+//     deratingK1: ...,               // optional per-row derating factors
+//     deratingK2: ...,
+//     deratingK3: ...,
+//     deratingK4: ...,
+//     deratingK5: ...,
 //     ...
 //   }
 // }
@@ -333,5 +340,73 @@ const deratedAmpacity = baseAmpacity * derating;
 ## CONCLUSION
 
 **Platform calculation engine achieves formula parity with Excel for 90% of critical functions**. The FLC and conductor selection logic are verified correct. Minor refinement needed for voltage drop interpretation to confirm whether Excel uses ampacity or load current for this calculation. All other critical functions (derating, short-circuit, BOQ aggregation) are functional and match Excel logic.
+
+---
+
+## Additional Template Audits
+
+Two comprehensive workbooks were provided by the user as the authoritative “sheet‑based” definition of the application.  Both contain dozens of interlinked formulas, lookup tables and selectable parameters.  Their structure has been analysed below to inform the React UI design and the import/normalisation logic.
+
+### 11 kV Cable sizing_Updated 3 1.xlsx
+
+- **Sheets:** `HT Cable`, `BOQ`, `Catalogue`
+- `HT Cable` is the primary data entry sheet for individual cable runs.  Key columns:
+  * A‑H: user inputs (Type, Load/Current, Voltage, PF, Efficiency, etc.)
+  * I‑K: compute load current, starting current and starting factor
+  * N‑R: compute required size (N=L*√M/94 etc.) and derating/ampacity check
+  * AB‑AK: lookup ratings from `Catalogue` sheet based on configuration
+  * AC‑AN: conductor spacing and grouping factors
+  * AE‑AF: voltage drop computation and pass/fail (≤2 % / 3 %)
+  * AH‑AJ: additional motor/impedance checks
+  * AK‑AL: final selected conductor designation string (e.g. "AC 3R x 11kV x 3C x 240 Sqmm")
+  * additional columns compute multiples, totals and BOQ fields (`BA`, `DW`‑`FT` series).  
+- `BOQ` sheet aggregates results from `HT Cable` using `SUMIF` and string concatenation; it mirrors the manner in which the platform will build its bill‑of‑quantities.
+- `Catalogue` sheet is a simple tabular lookup with conductor sizes, ampacity values and physical parameters; no formulas present.
+
+> **Takeaway:** the platform must reproduce the chain of calculations in `HT Cable` exactly, particularly the derating/ampacity selection logic.  Every formula above has a direct analogue in the existing engine; the only one flagged for further review (AE‡ voltage‑drop formula) has already been noted earlier in this document.
+
+### Sizing new sheet.xlsx
+
+This large workbook is essentially a superset combining LV, MV and tray‑sizing calculators with multiple catalogue tabs.
+
+- **Sheets of interest:**
+  * `LV Cable sizing_SS‑1`, `LV Cable sizing_SS‑2`, `LV Cable sizing_SS‑3` – three variations of the LV calculator differing only in index offsets.  They all implement the identical row‑level logic:
+    - input columns for phase, load type, voltage, power factor, length, installation method, core count, grouping, cable type (Cu/Al), etc.
+    - formulas compute FLC, starting current, derating, ampacity lookup (using VLOOKUP on `Catalogue Aluminium`), voltage drop % (same pattern as 11 kV sheet), pass/fail thresholds, and finally a formatted conductor string.
+    - additional columns perform grouping selections (the long `BA7` string building formula) and multiplication tables for cable quantities (DW‑FT blocks) used by the tray/BOQ utilities.
+  * `MV Cable sizing‑6.6kV` and `MV Cable sizing‑11kV` – similar structure to LV sheets but with MV‑specific constants and slightly different column indices.
+  * `Tray Sizing` and `Tray-Void` – simple sum/lookup formulas used for tray fill calculations; they reference a hidden `#REF` sheet containing per‑cable areas.
+  * `Catalogue Aluminium`, `Catalogue_CU`, `Catalogue Copper`, `Catalogue A_old` – static tables used by the various calculator sheets; there are no internal formulas.
+
+> **Takeaway:** the LV/MV calculator logic is essentially identical across voltage levels and sheet variations, meaning a single code path can support all by parameterising voltage, phase and cable table ranges.  The lengthy `BA` group‑by string construction is also replicated in the platform when generating the BOQ grouping key.
+
+### Common formula patterns to implement
+
+1. **Load current / FLC** – (kW or kVA) ÷ (√3 × V × PF × η).
+2. **Motor starting current** – FLC × 7.2 (DOL) or 6 (VFD) depending on type.
+3. **Required conductor count/size** – N = L×√M ÷ 94 (approx), then rounded up and compared against ampacity.
+4. **Ampacity lookup and derating** – VLOOKUP on `Catalogue …` table, choose column by installation method, apply factors from adjacent cells (ambient, grouping, depth etc.).
+5. **Voltage drop %** – √3 × I × (R × L + X×sin(acos(PF))) ÷ (V × 1000) ×100; threshold 2 %/3 %.
+6. **Selection string formatting** – `CONCATENATE(size, "R X ", voltage, "kV X ", cores, " X ", area, " Sqmm")` with variations for 1C/3C and PE.
+7. **BOQ grouping key** – long concatenation of any checked‑on options from the front‑end UI represented by flags in the sheet (BE7…FT7 etc.).
+
+### Next actions from step 1
+
+The above analyses yield the “truth” for our engine.  The UI and normaliser will now be adjusted to ensure:
+
+* every input column present in the sheets can be ingested; new fields such as `Cable Type` (Cu/Al), `Installation Method`, `Derating Factor`, `Length`, `Voltage`, `Load Type`, `Group`, etc. must have mapping synonyms added.
+* the results page replicates the same row‑order and column set, allowing users to manually edit values and trigger recalculations using a formula parser that mirrors the workbook formulas above.
+* the catalogue drop‑down on the results sheet includes both Cu and Al tables and supports the derating factors defined in the `Catalogue` sheets.
+
+With step 1 now complete, we can proceed to task 2: updating the template generators so that the spreadsheets produced by the application match these audited workbooks exactly.  That will enable users to download an authoritative template, make changes, and re‑upload with full round‑trip fidelity.
+
+---
+
+*Documentation produced on:* 2026‑02‑21
+
+*Files analysed:* `images/11 kV Cable sizing_Updated 3 1.xlsx` and `images/Sizing new sheet.xlsx`
+
+*Outcome:* foundational specification created; code modifications will follow in subsequent tasks.
+
 
 **Next Step**: Run integrated UI test (upload Excel files → size cables → export → diff against Excel) to validate end-to-end workflow.

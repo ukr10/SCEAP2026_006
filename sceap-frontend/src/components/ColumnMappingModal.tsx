@@ -21,21 +21,20 @@ const STANDARD_FIELDS = [
   { name: 'toBus', label: 'To Bus', examples: ['To Bus', 'To', 'Destination', 'Panel', 'Source'] },
   { name: 'voltage', label: 'Voltage (V)', examples: ['Voltage (V)', 'Voltage', 'V (V)', 'V', 'Nominal Voltage'] },
   { name: 'loadKW', label: 'Load (kW)', examples: ['Load (kW)', 'Load KW', 'kW', 'Power', 'P'] },
+  { name: 'ratedPowerKVA', label: 'Rated Power (kVA)', examples: ['Rated Power (kVA)', 'kVA'] },
+  { name: 'ratedPowerKW', label: 'Rated Power (kW)', examples: ['Rated Power (kW)', 'kW'] },
   { name: 'length', label: 'Length (m)', examples: ['Length (m)', 'Length', 'L (m)', 'L', 'Distance'] },
   { name: 'powerFactor', label: 'Power Factor', examples: ['Power Factor', 'PF', 'Cos φ'] },
   { name: 'efficiency', label: 'Efficiency', examples: ['Efficiency (%)', 'Efficiency', 'Eff'] },
   { name: 'deratingFactor', label: 'Derating Factor', examples: ['Derating Factor', 'Derating', 'K', 'Factor'] },
   { name: 'ambientTemp', label: 'Ambient Temp (°C)', examples: ['Ambient Temp (°C)', 'Ambient Temp', 'Temp'] },
+  { name: 'groundTemp', label: 'Ground Temp (°C)', examples: ['Ground Temp', 'Ground Temperature'] },
   { name: 'installationMethod', label: 'Installation Method', examples: ['Installation Method', 'Installation', 'Method', 'Type'] },
+  { name: 'motorStartingCurrent', label: 'Motor Starting Current (A)', examples: ['Motor Starting Current'] },
+  { name: 'motorStartingPF', label: 'Motor Starting PF', examples: ['Motor Starting PF'] },
+  { name: 'scDuration', label: 'SC Withstand Duration (sec)', examples: ['SC Withstand Duration', 'Duration (sec)'] },
   { name: 'numberOfLoadedCircuits', label: 'Grouped Loaded Circuits', examples: ['Grouped Loaded Circuits', 'Circuits', 'Groups'] },
-  { name: 'protectionType', label: 'Breaker Type', examples: ['Breaker Type', 'Protection Type', 'Breaker', 'Protection'] },
-  { name: 'maxShortCircuitCurrent', label: 'Short Circuit Current (kA)', examples: ['Short Circuit Current (kA)', 'ISc', 'Isc', 'SC Current'] }
-];
-
-const ColumnMappingModal: React.FC<ColumnMappingModalProps> = ({
-  excelHeaders,
-  parsedRows,
-  onConfirm,
+  { name: 'noOfCores', label: 'Number of Cores', examples: ['No. of Cores', 'Cores'] },
   onCancel,
   detectedMappings
 }) => {

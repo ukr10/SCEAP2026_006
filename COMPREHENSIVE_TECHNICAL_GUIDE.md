@@ -502,6 +502,12 @@ const ResultsTab = () => {
       {/* Export buttons */}
       <button onClick={handleExportExcel}>Excel</button>
       <button onClick={handleExportPDF}>PDF</button>
+
+      {/* column chooser toggles visibility in table and exports */}
+      <div className="inline-block ml-4">
+        <button className="px-2 py-1 bg-slate-700 text-white rounded" onClick={() => {/* open menu */}}>Columns</button>
+        {/* clicking shows checkboxes for every field; hiding a column also removes it from subsequent Excel/PDF exports */}
+      </div>
       
       {/* Results table with vertical scrolling */}
       <div className="overflow-y-auto results-table-scroll" style={{ height: '1000px' }}>

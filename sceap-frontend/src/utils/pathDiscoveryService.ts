@@ -34,6 +34,9 @@ export interface CableSegment {
   // NEW FIELDS FOR PROFESSIONAL CABLE SIZING
   numberOfCores?: '1C' | '2C' | '3C' | '3C+E' | '4C'; // Conductor cores
   conductorMaterial?: 'Cu' | 'Al'; // Copper or Aluminum
+  // Parallel run bookkeeping (multiple physical cables from same source)
+  parallelCount?: number;        // how many cables share this same fromBus
+  originalCables?: string[];     // list of cable numbers in the parallel group
   phase?: '1Ø' | '3Ø'; // Single or Three Phase
   loadType?: 'Motor' | 'Heater' | 'Transformer' | 'Feeder' | 'Pump' | 'Fan' | 'Compressor';
   efficiency?: number; // 0.0-1.0, for motors typically 0.85-0.96
@@ -134,7 +137,14 @@ export const autoDetectColumnMappings = (headers: string[]): Record<string, stri
     installationMethod: ['installation method', 'installation', 'method', 'type', 'cable installation'],
     numberOfLoadedCircuits: ['grouped loaded circuits', 'circuits', 'groups', 'grouped circuits', 'number of circuits'],
     protectionType: ['breaker type', 'protection type', 'breaker', 'protection', 'circuit breaker'],
-    maxShortCircuitCurrent: ['short circuit current (ka)', 'isc', 'isc (ka)', 'short circuit', 'sc current', 'trip time (ms)']
+    maxShortCircuitCurrent: ['short circuit current (ka)', 'isc', 'isc (ka)', 'short circuit', 'sc current', 'trip time (ms)'],
+    ratedPowerKVA: ['rated power (kva)', 'kva', 'power kva'],
+    ratedPowerKW: ['rated power (kw)', 'kw', 'power kw'],
+    motorStartingCurrent: ['motor starting current', 'starting current', 'startup current'],
+    motorStartingPF: ['motor starting pf', 'starting power factor'],
+    scDuration: ['sc withstand duration', 'withstand duration', 'duration (sec)'],
+    noOfCores: ['no. of cores', 'number of cores', 'cores', 'core count'],
+    groundTemp: ['ground temp', 'ground temperature', 'soil temp']
   };
 
   for (const [field, synonyms] of Object.entries(fieldSynonyms)) {
@@ -241,7 +251,21 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
         fromBus: getString(getColumnValue(feeder, 'fromBus', 'From Bus', 'From', 'Source', 'Load', 'Equipment', 'from bus', 'from', 'source'), ''),
         toBus: getString(getColumnValue(feeder, 'toBus', 'To Bus', 'To', 'Destination', 'Panel', 'to bus', 'to', 'destination'), ''),
         voltage,
-        loadKW: getNumber(getColumnValue(feeder, 'loadKW', 'Load (kW)', 'Load KW', 'Load', 'Power', 'kW', 'load (kw)', 'power (kw)'), 0),
+        // Determine loadKW from direct entry or rated power fields
+        loadKW: (() => {
+          const direct = getNumber(getColumnValue(feeder, 'loadKW', 'Load (kW)', 'Load KW', 'Load', 'Power', 'kW', 'load (kw)', 'power (kw)'), NaN);
+          if (!isNaN(direct) && direct > 0) return direct;
+          const kw = getNumber(getColumnValue(feeder, 'ratedPowerKW', 'Rated Power (kW)', 'kW'), NaN);
+          if (!isNaN(kw) && kw > 0) return kw;
+          const kva = getNumber(getColumnValue(feeder, 'ratedPowerKVA', 'Rated Power (kVA)', 'kVA'), NaN);
+          if (!isNaN(kva) && kva > 0) {
+            const pf = getNumber(getColumnValue(feeder, 'powerFactor', 'Power Factor', 'PF'), 0.85);
+            const eff = getNumber(getColumnValue(feeder, 'efficiency', 'Efficiency (%)', 'Efficiency', 'Eff'), 0.92);
+            const vval = voltage || 415;
+            return (kva * 1000 * pf * eff) / (Math.sqrt(3) * vval);
+          }
+          return 0;
+        })(),
         length: getNumber(getColumnValue(feeder, 'length', 'Length (m)', 'Length', 'L', 'Distance', 'length (m)', 'cable length'), 0),
         deratingFactor: getNumber(
           getColumnValue(feeder, 'deratingFactor', 'Derating Factor', 'Derating', 'K', 'derating factor', 'derating k'),
@@ -250,10 +274,8 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
         resistance: getNumber(getColumnValue(feeder, 'resistance', 'Resistance', 'R', 'resistance'), 0),
         reactance: getNumber(getColumnValue(feeder, 'reactance', 'Reactance', 'X', 'reactance'), 0),
         numberOfCores,
-        conductorMaterial: getString(
-          getColumnValue(feeder, 'conductorMaterial', 'Material', 'Conductor', 'material'),
-          'Cu'
-        ).toUpperCase() === 'AL' ? 'Al' : 'Cu',
+        // conductorMaterial removed from feeder list; material chosen later
+        conductorMaterial: 'Cu',
         phase: (getString(getColumnValue(feeder, 'phase', 'Phase', 'phase'), '') as '1Ø' | '3Ø') || (voltage >= 400 ? '3Ø' : '1Ø'),
         loadType: (getString(getColumnValue(feeder, 'loadType', 'Load Type', 'Type', 'load type', 'type'), 'Motor')) as any,
         // Handle percent-formatted efficiency and power factor (e.g., 92 for 92%)
@@ -283,7 +305,12 @@ export const normalizeFeeders = (rawFeeders: any[]): CableSegment[] => {
         // NEW: Protection type determines if ISc check is applied (ISc only for ACB)
         protectionType: (getString(getColumnValue(feeder, 'protectionType', 'Breaker Type', 'Protection Type', 'Breaker', 'breaker type', 'protection'), 'None')) as 'ACB' | 'MCCB' | 'MCB' | 'None',
         // Alias for protectionType (display name for Results table)
-        breakerType: getString(getColumnValue(feeder, 'breakerType', 'Protection Type', 'Breaker Type', 'Breaker', 'breaker type', 'protection'), 'MCCB')
+        breakerType: getString(getColumnValue(feeder, 'breakerType', 'Protection Type', 'Breaker Type', 'Breaker', 'breaker type', 'protection'), 'MCCB'),
+        // Additional optional fields
+        motorStartingCurrent: getNumber(getColumnValue(feeder, 'motorStartingCurrent', 'Motor Starting Current', 'Starting Current'), 0),
+        motorStartingPF: getNumber(getColumnValue(feeder, 'motorStartingPF', 'Motor Starting PF', 'Starting PF'), 0),
+        scDuration: getNumber(getColumnValue(feeder, 'scDuration', 'SC Withstand Duration', 'Duration (sec)'), 0),
+        groundTemp: getNumber(getColumnValue(feeder, 'groundTemp', 'Ground Temp', 'Ground Temperature', 'Soil Temp'), 0)
       };
     });
 };
@@ -359,13 +386,34 @@ export const discoverPathsToTransformer = (cables: CableSegment[]): CablePath[] 
   let pathIndex = 1;
   
   // Find all cables that originate from end-loads (fromBus is never a toBus of another cable = true leaf)
-  const endLoadCables = cables.filter(cable => {
+  const rawEndLoadCables = cables.filter(cable => {
     const fromBusNorm = normalizeBus(cable.fromBus);
     // True end-load: this bus is a fromBus but never a toBus of any other cable
     return !cableToBuses.has(fromBusNorm) || cableToBuses.has(fromBusNorm) === false;
   });
 
-  console.log(`[PATH DISCOVERY] Found ${endLoadCables.length} end-load cables out of ${cables.length} total cables`);
+  console.log(`[PATH DISCOVERY] Found ${rawEndLoadCables.length} end-load cables out of ${cables.length} total cables`);
+
+  // Group cables by normalized fromBus so parallel runs are treated as a single logical path
+  const groupedMap = new Map<string, CableSegment>();
+  rawEndLoadCables.forEach(c => {
+    const key = normalizeBus(c.fromBus);
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, { ...c, parallelCount: 1, originalCables: [c.cableNumber] });
+    } else {
+      const existing = groupedMap.get(key)!;
+      existing.parallelCount = (existing.parallelCount || 1) + 1;
+      existing.originalCables = existing.originalCables || [existing.cableNumber];
+      existing.originalCables.push(c.cableNumber);
+      // accumulate load and choose longest length for display
+      existing.loadKW = (existing.loadKW || 0) + (c.loadKW || 0);
+      existing.length = Math.max(existing.length || 0, c.length || 0);
+    }
+  });
+
+  const endLoadCables = Array.from(groupedMap.values());
+
+  console.log(`[PATH DISCOVERY] Grouped into ${endLoadCables.length} unique starting buses (parallel runs collapsed)`);
 
   // Trace back each end-load to a root (dead-end or top-level bus)
   for (const startCable of endLoadCables) {
@@ -445,6 +493,12 @@ const traceBackToTransformer = (
     // Find the parent cable (cable where fromBus == current.toBus)
     const nextFromBusNorm = normalizeBus(currentCable.toBus);
     
+    // If we've reached a transformer bus explicitly, stop tracing
+    if (/^TRF/i.test(nextFromBusNorm)) {
+      console.log(`[TRACE] Transformer reached at bus: ${currentCable.toBus}`);
+      break;
+    }
+
     if (visited.has(nextFromBusNorm)) {
       // Cycle detected - path is malformed
       console.warn(`[TRACE] Cycle detected at bus: ${currentCable.toBus}`);

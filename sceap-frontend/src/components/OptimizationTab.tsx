@@ -131,7 +131,11 @@ const OptimizationTab = () => {
                         {/* Arrow */}
                         <div className="flex flex-col items-center justify-center px-2">
                           <ArrowRight className="text-cyan-400 flex-shrink-0" size={18} />
-                          <span className="text-cyan-300 text-xs font-bold mt-1 whitespace-nowrap">{cable.cableNumber}</span>
+                          <span className="text-cyan-300 text-xs font-bold mt-1 whitespace-nowrap">
+                            {cable.parallelCount && cable.parallelCount > 1
+                              ? `${cable.originalCables?.join(', ')} (${cable.parallelCount} runs)`
+                              : cable.cableNumber}
+                          </span>
                           <span className="text-slate-400 text-xs">({cable.length.toFixed(1)}m)</span>
                         </div>
                         

@@ -264,6 +264,33 @@ const ResultsTab = () => {
   const [results, setResults] = useState<ExcelResultRow[]>([]);
   const [globalEditMode, setGlobalEditMode] = useState(false);
   const [userOverrides, setUserOverrides] = useState<Record<number, { cableSize?: number; numberOfRuns?: number; numberOfCores?: '1C' | '2C' | '3C' | '4C'}>>({});
+  const [showColumnsMenu, setShowColumnsMenu] = useState(false);
+  // column visibility map - true = visible
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({});
+
+  // initialize visibleColumns once
+  useEffect(() => {
+    const cols: Record<string, boolean> = {};
+    // list of all field labels used in the table header (row2)
+    const allLabels = [
+      'SL','Cable #','From','To','Desc','Type','kW','kV','PF','η','FLC','I_m','PF_m','Inst',
+      'Isc','t','Sz','Meth','Cores','Sz2','I','R','X','L','K_t','I_d','Runs','OK','K1','K2','K3','K5','K4',
+      'ΔU','%ΔU','OK2','ΔU2','%ΔU2','OK3','Description','Rem','Status'
+    ];
+    allLabels.forEach(l => { cols[l] = true; });
+    setVisibleColumns(cols);
+  }, []);
+
+  // helper to toggle visibility
+  const toggleColumn = (label: string) => {
+    setVisibleColumns(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  // cell CSS generator respects visibility state
+  const cellClass = (label: string, extra = '') => {
+    const base = 'border border-slate-600 px-1 py-0.5';
+    return `${base} ${!visibleColumns[label] ? 'hidden' : ''} ${extra}`.trim();
+  };
 
   // Get available cable sizes from catalogue (if available)
   const getCableSizes = (): number[] => {
@@ -379,59 +406,97 @@ const ResultsTab = () => {
   };
 
   const handleExportExcel = () => {
-    // Build grouped header rows then data rows
-    const groups = [
-      { name: 'ID & ROUTING', span: 6 },
-      { name: 'LOAD', span: 9 },
-      { name: 'SC WITHSTAND', span: 4 },
-      { name: 'CABLE DATA', span: 6 },
-      { name: 'CAPACITY', span: 9 },
-      { name: 'RUNNING V-DROP', span: 3 },
-      { name: 'STARTING V-DIP', span: 3 },
-      { name: 'REMARKS', span: 3 }
-    ];
-
+    // field labels (some include units) and corresponding visibility keys
     const fields = [
-      'SL','Cable #','From','To','Desc','Type',
-      'kW','kV','PF','η%','FLC','I_m','PF_m','Inst','Isc',
-      't(s)','Sz','Meth','Core',
-      'Sz(mm²)','I(A)','R(Ω/km)','X(Ω/km)','L(m)','K_t',
-      'I_d(A)','Runs','OK','K1','K2','K3','K5','K4','Cap',
+      // ID & ROUTING
+      'SL','Cable #','From','To','Desc',
+      // LOAD
+      'Type','kW','kV','PF','η%','FLC','I_m','PF_m','Inst',
+      // SC WITHSTAND
+      'Isc','t(s)','Sz','Meth',
+      // CABLE DATA
+      'Cores','Sz(mm²)','I(A)','R(Ω/km)','X(Ω/km)','L(m)',
+      // CAPACITY
+      'K_t','I_d(A)','Runs','OK','K1','K2','K3','K5','K4',
+      // RUNNING V-DROP
       'ΔU(V)','%ΔU','OK',
+      // STARTING V-DIP
       'ΔU(V)','%ΔU','OK',
-      'Designation','Remarks','Status'
+      // Description (separate)
+      'Description',
+      // REMARKS
+      'Rem','Status'
     ];
 
+    const fieldKeys = [
+      // matching order with fields above, but keys used in visibleColumns
+      'SL','Cable #','From','To','Desc',
+      'Type','kW','kV','PF','η','FLC','I_m','PF_m','Inst',
+      'Isc','t','Sz','Meth',
+      'Cores','Sz2','I','R','X','L',
+      'K_t','I_d','Runs','OK','K1','K2','K3','K5','K4',
+      'ΔU','%ΔU','OK2',
+      'ΔU2','%ΔU2','OK3',
+      'Description',
+      'Rem','Status'
+    ];
+
+    // group definitions using keys
+    const groupsSpec = [
+      { name: 'ID & ROUTING', keys: ['SL','Cable #','From','To','Desc'] },
+      { name: 'LOAD', keys: ['Type','kW','kV','PF','η','FLC','I_m','PF_m','Inst'] },
+      { name: 'SC WITHSTAND', keys: ['Isc','t','Sz','Meth'] },
+      { name: 'CABLE DATA', keys: ['Cores','Sz2','I','R','X','L'] },
+      { name: 'CAPACITY', keys: ['K_t','I_d','Runs','OK','K1','K2','K3','K5','K4'] },
+      { name: 'RUNNING V-DROP', keys: ['ΔU','%ΔU','OK2'] },
+      { name: 'STARTING V-DIP', keys: ['ΔU2','%ΔU2','OK3'] },
+      { name: 'Description', keys: ['Description'] },
+      { name: 'REMARKS', keys: ['Rem','Status'] }
+    ];
+
+    // determine which field indices are visible
+    const visibleIndices = fieldKeys
+      .map((k, i) => (visibleColumns[k] ? i : -1))
+      .filter(i => i >= 0);
+
+    // build header rows respecting visibility
     const headerRow1: any[] = [];
-    groups.forEach(g => {
-      headerRow1.push(g.name);
-      for (let i = 1; i < g.span; i++) headerRow1.push('');
+    groupsSpec.forEach(g => {
+      const span = g.keys.filter(k => visibleColumns[k]).length;
+      if (span > 0) {
+        headerRow1.push(g.name);
+        for (let i = 1; i < span; i++) headerRow1.push('');
+      }
     });
+    const headerRow2 = visibleIndices.map(i => fields[i]);
 
-    const headerRow2 = fields;
-
-    const dataRows = results.map(r => [
-      r.slNo, r.cableNumber, r.fromBus, r.toBus, r.description, r.feederType,
-      r.ratedPowerKW.toFixed(2), r.ratedVoltageKV.toFixed(2), r.powerFactor.toFixed(2), (r.efficiency * 100).toFixed(0), r.flc_A.toFixed(2), r.motorStartingCurrent_A.toFixed(2), r.motorStartingPF.toFixed(2), r.installation, r.scCurrentSwitchboard_kA.toFixed(2),
-      r.scCurrentWithstandDuration_Sec.toFixed(2), r.minSizeShortCircuit_sqmm.toFixed(0), 'AIR', r.numberOfCores,
-      r.cableSize_sqmm, r.cableCurrentRating_A.toFixed(1), r.cableResistance_90C_Ohm_Ph_km.toFixed(4), r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4), r.cableLength_m.toFixed(1), r.k_total_deratingFactor.toFixed(3),
-      r.derated_currentCarryingCapacity_A.toFixed(1), r.numberOfRuns, r.capacityCheck, r.k1_ambientTemp.toFixed(3), r.k2_groupingFactor.toFixed(3), r.k3_groundTemp.toFixed(3), r.k5_thermalResistivity.toFixed(3), r.k4_depthOfLaying.toFixed(3), r.capacityCheck === 'YES' ? '✓' : '⚠',
+    // build data rows and then filter
+    const rawRows = results.map(r => [
+      r.slNo, r.cableNumber, r.fromBus, r.toBus, r.description,
+      r.feederType, r.ratedPowerKW.toFixed(2), r.ratedVoltageKV.toFixed(2), r.powerFactor.toFixed(2), (r.efficiency * 100).toFixed(0), r.flc_A.toFixed(2), r.motorStartingCurrent_A.toFixed(2), r.motorStartingPF.toFixed(2), r.installation,
+      r.scCurrentSwitchboard_kA.toFixed(2), r.scCurrentWithstandDuration_Sec.toFixed(2), r.minSizeShortCircuit_sqmm.toFixed(0), 'AIR',
+      r.numberOfCores, r.cableSize_sqmm, r.cableCurrentRating_A.toFixed(1), r.cableResistance_90C_Ohm_Ph_km.toFixed(4), r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4), r.cableLength_m.toFixed(1),
+      r.k_total_deratingFactor.toFixed(3), r.derated_currentCarryingCapacity_A.toFixed(1), r.numberOfRuns, r.capacityCheck === 'YES' ? '✓' : '⚠', r.k1_ambientTemp.toFixed(3), r.k2_groupingFactor.toFixed(3), r.k3_groundTemp.toFixed(3), r.k5_thermalResistivity.toFixed(3), r.k4_depthOfLaying.toFixed(3),
       r.runningVoltageDrop_V.toFixed(2), r.runningVoltageDrop_percent.toFixed(2), r.runningVoltageDrop_percent <= 3 ? '✓' : '⚠',
       r.startingVoltageDip_V.toFixed(2), r.startingVoltageDip_percent.toFixed(2), r.startingVoltageDropCheck === 'YES' ? '✓' : '⚠',
-      r.cableDesignation, r.remarks, r.status
+      r.cableDesignation,
+      r.remarks, r.status
     ]);
+
+    const dataRows = rawRows.map(row => visibleIndices.map(i => row[i]));
 
     const aoa = [headerRow1, headerRow2, ...dataRows];
     const worksheet = XLSX.utils.aoa_to_sheet(aoa);
 
-    // Build merges to visually group headerRow1 spans
+    // compute merges based on filtered groups
     const merges: any[] = [];
     let colIndex = 0;
-    groups.forEach(g => {
-      if (g.span > 1) {
-        merges.push({ s: { r:0, c:colIndex }, e: { r:0, c:colIndex + g.span - 1 } });
+    groupsSpec.forEach(g => {
+      const span = g.keys.filter(k => visibleColumns[k]).length;
+      if (span > 1) {
+        merges.push({ s: { r: 0, c: colIndex }, e: { r: 0, c: colIndex + span - 1 } });
       }
-      colIndex += g.span;
+      colIndex += span;
     });
     worksheet['!merges'] = merges;
 
@@ -453,95 +518,90 @@ const ResultsTab = () => {
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 16);
     doc.text(`Total Cables: ${results.length} | Approved: ${results.filter(r => r.status === 'APPROVED').length}`, 14, 20);
     
-    // Prepare data with proper grouping
-    const tableData = results.map((r) => [
-      // ID & ROUTING (6 cols: blue)
-      r.slNo.toString(),
-      r.cableNumber,
-      r.fromBus,
-      r.toBus,
-      r.description.substring(0, 20),
-      r.feederType,
-      
-      // LOAD (9 cols: cyan)
-      r.ratedPowerKW.toFixed(2),
-      r.ratedVoltageKV.toFixed(2),
-      r.powerFactor.toFixed(2),
-      (r.efficiency * 100).toFixed(0),
-      r.flc_A.toFixed(2),
-      r.motorStartingCurrent_A.toFixed(2),
-      r.motorStartingPF.toFixed(2),
-      r.installation,
-      r.scCurrentSwitchboard_kA.toFixed(2),
-      
-      // SC WITHSTAND (4 cols: orange)
-      r.scCurrentWithstandDuration_Sec.toFixed(2),
-      r.minSizeShortCircuit_sqmm.toFixed(0),
-      'AIR',
-      r.numberOfCores,
-      
-      // CABLE DATA (6 cols: purple)
-      r.cableSize_sqmm.toString(),
-      r.cableCurrentRating_A.toFixed(1),
-      r.cableResistance_90C_Ohm_Ph_km.toFixed(4),
-      r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4),
-      r.cableLength_m.toFixed(1),
-      r.k_total_deratingFactor.toFixed(3),
-      
-      // CAPACITY (9 cols: green)
-      r.derated_currentCarryingCapacity_A.toFixed(1),
-      r.numberOfRuns.toString(),
-      r.capacityCheck,
-      r.k1_ambientTemp.toFixed(3),
-      r.k2_groupingFactor.toFixed(3),
-      r.k3_groundTemp.toFixed(3),
-      r.k5_thermalResistivity.toFixed(3),
-      r.k4_depthOfLaying.toFixed(3),
-      r.capacityCheck === 'YES' ? '✓' : '⚠',
-      
-      // RUNNING V-DROP (3 cols: red)
-      r.runningVoltageDrop_V.toFixed(2),
-      r.runningVoltageDrop_percent.toFixed(2),
+    // Prepare data with proper grouping and filter by visibility
+    const fields = [
+      'SL','Cable #','From','To','Desc',
+      'Type','kW','kV','PF','η%','FLC','I_m','PF_m','Inst',
+      'Isc','t(s)','Sz','Meth',
+      'Cores','Sz(mm²)','I(A)','R(Ω/km)','X(Ω/km)','L(m)',
+      'K_t','I_d(A)','Runs','OK','K1','K2','K3','K5','K4',
+      'ΔU(V)','%ΔU','OK',
+      'ΔU(V)','%ΔU','OK',
+      'Description','Rem','Status'
+    ];
+    const fieldKeys = [
+      'SL','Cable #','From','To','Desc',
+      'Type','kW','kV','PF','η','FLC','I_m','PF_m','Inst',
+      'Isc','t','Sz','Meth',
+      'Cores','Sz2','I','R','X','L',
+      'K_t','I_d','Runs','OK','K1','K2','K3','K5','K4',
+      'ΔU','%ΔU','OK2',
+      'ΔU2','%ΔU2','OK3',
+      'Description','Rem','Status'
+    ];
+    const groupsSpec = [
+      { name: 'ID & ROUTING', keys: ['SL','Cable #','From','To','Desc'] },
+      { name: 'LOAD', keys: ['Type','kW','kV','PF','η','FLC','I_m','PF_m','Inst'] },
+      { name: 'SC WITHSTAND', keys: ['Isc','t','Sz','Meth'] },
+      { name: 'CABLE DATA', keys: ['Cores','Sz2','I','R','X','L'] },
+      { name: 'CAPACITY', keys: ['K_t','I_d','Runs','OK','K1','K2','K3','K5','K4'] },
+      { name: 'RUNNING V-DROP', keys: ['ΔU','%ΔU','OK2'] },
+      { name: 'STARTING V-DIP', keys: ['ΔU2','%ΔU2','OK3'] },
+      { name: 'Description', keys: ['Description'] },
+      { name: 'REMARKS', keys: ['Rem','Status'] }
+    ];
+
+    const visibleIndices = fieldKeys
+      .map((k, i) => (visibleColumns[k] ? i : -1))
+      .filter(i => i >= 0);
+
+    // raw rows
+    const rawRows = results.map(r => [
+      r.slNo.toString(), r.cableNumber, r.fromBus, r.toBus, r.description.substring(0, 20),
+      r.feederType, r.ratedPowerKW.toFixed(2), r.ratedVoltageKV.toFixed(2), r.powerFactor.toFixed(2),
+      (r.efficiency * 100).toFixed(0), r.flc_A.toFixed(2), r.motorStartingCurrent_A.toFixed(2), r.motorStartingPF.toFixed(2), r.installation,
+      r.scCurrentSwitchboard_kA.toFixed(2), r.scCurrentWithstandDuration_Sec.toFixed(2), r.minSizeShortCircuit_sqmm.toFixed(0), 'AIR',
+      r.numberOfCores, r.cableSize_sqmm.toString(), r.cableCurrentRating_A.toFixed(1),
+      r.cableResistance_90C_Ohm_Ph_km.toFixed(4), r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4), r.cableLength_m.toFixed(1),
+      r.k_total_deratingFactor.toFixed(3), r.derated_currentCarryingCapacity_A.toFixed(1), r.numberOfRuns.toString(),
+      r.capacityCheck === 'YES' ? '✓' : '⚠', r.k1_ambientTemp.toFixed(3), r.k2_groupingFactor.toFixed(3), r.k3_groundTemp.toFixed(3),
+      r.k5_thermalResistivity.toFixed(3), r.k4_depthOfLaying.toFixed(3),
+      r.runningVoltageDrop_V.toFixed(2), r.runningVoltageDrop_percent.toFixed(2),
       r.runningVoltageDrop_percent <= 3 ? '✓' : '⚠',
-      
-      // STARTING V-DIP (3 cols: yellow)
-      r.startingVoltageDip_V.toFixed(2),
-      r.startingVoltageDip_percent.toFixed(2),
-      r.startingVoltageDip_percent <= 5 ? '✓' : '⚠',
-      
-      // REMARKS (3 cols: gray)
-      r.cableDesignation,
-      r.remarks.substring(0, 30),
-      r.status
+      r.startingVoltageDip_V.toFixed(2), r.startingVoltageDip_percent.toFixed(2),
+      r.startingVoltageDropCheck === 'YES' ? '✓' : '⚠',
+      r.cableDesignation, r.remarks.substring(0, 30), r.status
     ]);
+    const tableData = rawRows.map(row => visibleIndices.map(i => row[i]));
+
+    // build header rows for PDF
+    const headerRow1 = groupsSpec
+      .map((g, gi) => {
+        const span = g.keys.filter(k => visibleColumns[k]).length;
+        if (span === 0) return null;
+        // predefined colors array matching existing order
+        const colors = [
+          {fill: [25,25,112], text: [173,216,230]},
+          {fill: [0,50,100], text: [175,238,238]},
+          {fill: [100,50,0], text: [255,165,0]},
+          {fill: [50,0,100], text: [218,112,214]},
+          {fill: [0,100,0], text: [144,238,144]},
+          {fill: [100,0,0], text: [255,99,71]},
+          {fill: [100,100,0], text: [255,255,0]},
+          {fill: [96,96,96], text: [255,255,255]},
+          {fill: [64,64,64], text: [211,211,211]},
+        ];
+        const color = colors[gi] || colors[0];
+        return { content: g.name, colSpan: span, halign: 'center', fillColor: color.fill, textColor: color.text } as any;
+      })
+      .filter(c => c !== null) as any[];
+
+    const headerRow2 = visibleIndices.map(i => fields[i]);
 
     // Create table with grouped headers using autoTable
     autoTable(doc, {
       startY: 24,
-      head: [
-        // Header Row 1: Column Groups
-        [
-          {content: 'ID & ROUTING', colSpan: 6, halign: 'center', fillColor: [25, 25, 112], textColor: [173, 216, 230]} as any,
-          {content: 'LOAD', colSpan: 9, halign: 'center', fillColor: [0, 50, 100], textColor: [175, 238, 238]} as any,
-          {content: 'SC WITHSTAND', colSpan: 4, halign: 'center', fillColor: [100, 50, 0], textColor: [255, 165, 0]} as any,
-          {content: 'CABLE DATA', colSpan: 6, halign: 'center', fillColor: [50, 0, 100], textColor: [218, 112, 214]} as any,
-          {content: 'CAPACITY', colSpan: 9, halign: 'center', fillColor: [0, 100, 0], textColor: [144, 238, 144]} as any,
-          {content: 'RUNNING V-DROP', colSpan: 3, halign: 'center', fillColor: [100, 0, 0], textColor: [255, 99, 71]} as any,
-          {content: 'STARTING V-DIP', colSpan: 3, halign: 'center', fillColor: [100, 100, 0], textColor: [255, 255, 0]} as any,
-          {content: 'REMARKS', colSpan: 3, halign: 'center', fillColor: [64, 64, 64], textColor: [211, 211, 211]} as any
-        ],
-        // Header Row 2: Field Names
-        [
-          'SL', 'Cable #', 'From', 'To', 'Desc', 'Type',
-          'kW', 'kV', 'PF', 'η%', 'FLC', 'I_m', 'PF_m', 'Inst', 'Isc',
-          't(s)', 'Sz', 'Meth', 'Core',
-          'Sz(mm²)', 'I(A)', 'R(Ω/km)', 'X(Ω/km)', 'L(m)', 'K_t',
-          'I_d(A)', 'Runs', 'OK', 'K1', 'K2', 'K3', 'K5', 'K4', 'Cap',
-          'ΔU(V)', '%ΔU', 'OK',
-          'ΔU(V)', '%ΔU', 'OK',
-          'Designation', 'Remarks', 'Status'
-        ]
-      ],
+      head: [headerRow1, headerRow2],
       body: tableData,
       styles: {
         fontSize: 8,
@@ -637,6 +697,30 @@ const ResultsTab = () => {
           <FileText size={16} />
           PDF
         </button>
+        {/* column chooser */}
+        <div className="relative inline-block">
+          <button
+            onClick={() => setShowColumnsMenu(prev => !prev)}
+            className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded flex items-center gap-1 transition text-sm ml-2"
+          >
+            Columns
+          </button>
+          {showColumnsMenu && (
+            <div className="absolute right-0 mt-2 w-48 max-h-64 overflow-auto bg-slate-800 border border-slate-600 rounded shadow-lg z-50 p-2 text-xs">
+              {Object.keys(visibleColumns).map(label => (
+                <label key={label} className="flex items-center mb-1">
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns[label]}
+                    onChange={() => toggleColumn(label)}
+                    className="mr-2"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
         
         <div className="text-sm text-slate-300">
           <span className="font-semibold">{results.length}</span> cables |
@@ -653,60 +737,61 @@ const ResultsTab = () => {
           <thead className="sticky top-0 z-20">
             {/* Header Row 1 - Column Groups */}
             <tr className="bg-slate-800">
-              <th colSpan={6} className="border-2 border-slate-700 px-2 py-1 bg-blue-950 text-blue-200 font-bold text-xs">ID & ROUTING</th>
+              <th colSpan={5} className="border-2 border-slate-700 px-2 py-1 bg-blue-950 text-blue-200 font-bold text-xs">ID & ROUTING</th>
               <th colSpan={9} className="border-2 border-slate-700 px-2 py-1 bg-cyan-950 text-cyan-200 font-bold text-xs">LOAD</th>
               <th colSpan={4} className="border-2 border-slate-700 px-2 py-1 bg-orange-950 text-orange-200 font-bold text-xs">SC WITHSTAND</th>
               <th colSpan={6} className="border-2 border-slate-700 px-2 py-1 bg-purple-950 text-purple-200 font-bold text-xs">CABLE DATA</th>
               <th colSpan={9} className="border-2 border-slate-700 px-2 py-1 bg-green-950 text-green-200 font-bold text-xs">CAPACITY</th>
               <th colSpan={3} className="border-2 border-slate-700 px-2 py-1 bg-red-950 text-red-200 font-bold text-xs">RUNNING V-DROP</th>
               <th colSpan={3} className="border-2 border-slate-700 px-2 py-1 bg-yellow-950 text-yellow-200 font-bold text-xs">STARTING V-DIP</th>
-              <th colSpan={3} className="border-2 border-slate-700 px-2 py-1 bg-slate-700 text-slate-200 font-bold text-xs">REMARKS</th>
+              <th colSpan={1} className="border-2 border-slate-700 px-2 py-1 bg-slate-800 text-slate-200 font-bold text-xs">Description</th>
+              <th colSpan={2} className="border-2 border-slate-700 px-2 py-1 bg-slate-700 text-slate-200 font-bold text-xs">REMARKS</th>
             </tr>
             
             {/* Header Row 2 - Field Names */}
             <tr className="bg-slate-700">
-              <th className="border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap">SL</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap">Cable #</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap">From</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap">To</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap">Desc</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">Type</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">kW</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">kV</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">PF</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">η</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">FLC</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">I_m</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">PF_m</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs">Inst</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-orange-300 text-xs">Isc</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-orange-300 text-xs">t</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-orange-300 text-xs">Sz</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-orange-300 text-xs">Meth</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-purple-300 text-xs">Cores</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-purple-300 text-xs">Sz</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-purple-300 text-xs">I</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-purple-300 text-xs">R</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-purple-300 text-xs">X</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-purple-300 text-xs">L</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">K_t</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">I_d</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">Runs</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">OK</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">K1</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">K2</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">K3</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">K5</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-green-300 text-xs">K4</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-red-300 text-xs">ΔU</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-red-300 text-xs">%</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-red-300 text-xs">OK</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-yellow-300 text-xs">ΔU</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-yellow-300 text-xs">%</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-yellow-300 text-xs">OK</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-slate-300 text-xs">Des</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-slate-300 text-xs">Rem</th>
-              <th className="border border-slate-600 px-1 py-0.5 text-slate-300 text-xs">Status</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap ${!visibleColumns['SL'] ? 'hidden' : ''}`}>SL</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap ${!visibleColumns['Cable #'] ? 'hidden' : ''}`}>Cable #</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap ${!visibleColumns['From'] ? 'hidden' : ''}`}>From</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap ${!visibleColumns['To'] ? 'hidden' : ''}`}>To</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-blue-300 text-xs whitespace-nowrap ${!visibleColumns['Desc'] ? 'hidden' : ''}`}>Desc</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['Type'] ? 'hidden' : ''}`}>Type</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['kW'] ? 'hidden' : ''}`}>kW</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['kV'] ? 'hidden' : ''}`}>kV</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['PF'] ? 'hidden' : ''}`}>PF</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['η'] ? 'hidden' : ''}`}>η</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['FLC'] ? 'hidden' : ''}`}>FLC</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['I_m'] ? 'hidden' : ''}`}>I_m</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['PF_m'] ? 'hidden' : ''}`}>PF_m</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-cyan-300 text-xs ${!visibleColumns['Inst'] ? 'hidden' : ''}`}>Inst</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-orange-300 text-xs ${!visibleColumns['Isc'] ? 'hidden' : ''}`}>Isc</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-orange-300 text-xs ${!visibleColumns['t'] ? 'hidden' : ''}`}>t</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-orange-300 text-xs ${!visibleColumns['Sz'] ? 'hidden' : ''}`}>Sz</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-orange-300 text-xs ${!visibleColumns['Meth'] ? 'hidden' : ''}`}>Meth</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-purple-300 text-xs ${!visibleColumns['Cores'] ? 'hidden' : ''}`}>Cores</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-purple-300 text-xs ${!visibleColumns['Sz2'] ? 'hidden' : ''}`}>Sz</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-purple-300 text-xs ${!visibleColumns['I'] ? 'hidden' : ''}`}>I</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-purple-300 text-xs ${!visibleColumns['R'] ? 'hidden' : ''}`}>R</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-purple-300 text-xs ${!visibleColumns['X'] ? 'hidden' : ''}`}>X</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-purple-300 text-xs ${!visibleColumns['L'] ? 'hidden' : ''}`}>L</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['K_t'] ? 'hidden' : ''}`}>K_t</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['I_d'] ? 'hidden' : ''}`}>I_d</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['Runs'] ? 'hidden' : ''}`}>Runs</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['OK'] ? 'hidden' : ''}`}>OK</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['K1'] ? 'hidden' : ''}`}>K1</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['K2'] ? 'hidden' : ''}`}>K2</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['K3'] ? 'hidden' : ''}`}>K3</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['K5'] ? 'hidden' : ''}`}>K5</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-green-300 text-xs ${!visibleColumns['K4'] ? 'hidden' : ''}`}>K4</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-red-300 text-xs ${!visibleColumns['ΔU'] ? 'hidden' : ''}`}>ΔU</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-red-300 text-xs ${!visibleColumns['%ΔU'] ? 'hidden' : ''}`}>%ΔU</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-red-300 text-xs ${!visibleColumns['OK2'] ? 'hidden' : ''}`}>OK</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-yellow-300 text-xs ${!visibleColumns['ΔU2'] ? 'hidden' : ''}`}>ΔU</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-yellow-300 text-xs ${!visibleColumns['%ΔU2'] ? 'hidden' : ''}`}>%ΔU</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-yellow-300 text-xs ${!visibleColumns['OK3'] ? 'hidden' : ''}`}>OK</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-slate-300 text-xs ${!visibleColumns['Description'] ? 'hidden' : ''}`}>Description</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-slate-300 text-xs ${!visibleColumns['Rem'] ? 'hidden' : ''}`}>Rem</th>
+              <th className={`border border-slate-600 px-1 py-0.5 text-slate-300 text-xs ${!visibleColumns['Status'] ? 'hidden' : ''}`}>Status</th>
             </tr>
           </thead>
 
@@ -720,14 +805,14 @@ const ResultsTab = () => {
                   'border-l-4 border-green-600'
                 }`}
               >
-                <td className="border border-slate-600 px-1 py-0.5 text-center text-slate-200 font-semibold text-xs">{r.slNo}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap">{r.cableNumber}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap">{r.fromBus}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap">{r.toBus}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs truncate max-w-xs">{r.description}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center text-slate-200 font-semibold text-xs" style={{ display: visibleColumns['SL'] ? '' : 'none' }}>{r.slNo}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['Cable #'] ? '' : 'none' }}>{r.cableNumber}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['From'] ? '' : 'none' }}>{r.fromBus}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['To'] ? '' : 'none' }}>{r.toBus}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs truncate max-w-xs" style={{ display: visibleColumns['Desc'] ? '' : 'none' }}>{r.description}</td>
                 
                 {/* Type - Editable Dropdown M/F */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['Type'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell
                       value={r.feederType}
@@ -743,7 +828,7 @@ const ResultsTab = () => {
                 </td>
 
                 {/* Power - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['kW'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.ratedPowerKW} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'loadKW', val)} precision={2} width="w-16" />
                   ) : (
@@ -751,10 +836,10 @@ const ResultsTab = () => {
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs">{r.ratedVoltageKV.toFixed(2)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['kV'] ? '' : 'none' }}>{r.ratedVoltageKV.toFixed(2)}</td>
 
                 {/* PowerFactor - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['PF'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.powerFactor} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'powerFactor', val)} precision={2} width="w-14" />
                   ) : (
@@ -763,7 +848,7 @@ const ResultsTab = () => {
                 </td>
 
                 {/* Efficiency - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['η'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={(r.efficiency * 100).toFixed(0)} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'efficiency', Number(val) / 100)} precision={0} width="w-14" />
                   ) : (
@@ -771,12 +856,12 @@ const ResultsTab = () => {
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/40 text-cyan-300 font-bold text-xs">{r.flc_A.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs">{r.motorStartingCurrent_A.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs">{r.motorStartingPF.toFixed(2)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/40 text-cyan-300 font-bold text-xs" style={{ display: visibleColumns['FLC'] ? '' : 'none' }}>{r.flc_A.toFixed(2)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['I_m'] ? '' : 'none' }}>{r.motorStartingCurrent_A.toFixed(2)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['PF_m'] ? '' : 'none' }}>{r.motorStartingPF.toFixed(2)}</td>
 
                 {/* Installation - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['Inst'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.installation} type="select" editable={true} onChange={(val) => handleCellChange(idx, 'installationMethod', val)} options={[{label: 'AIR', value: 'AIR'}, {label: 'TRENCH', value: 'TRENCH'}, {label: 'DUCT', value: 'DUCT'}]} width="w-16" />
                   ) : (
@@ -784,13 +869,13 @@ const ResultsTab = () => {
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs">{r.scCurrentSwitchboard_kA.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs">{r.scCurrentWithstandDuration_Sec.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs">{r.minSizeShortCircuit_sqmm.toFixed(0)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 text-xs">AIR</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['Isc'] ? '' : 'none' }}>{r.scCurrentSwitchboard_kA.toFixed(2)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['t'] ? '' : 'none' }}>{r.scCurrentWithstandDuration_Sec.toFixed(2)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['Sz'] ? '' : 'none' }}>{r.minSizeShortCircuit_sqmm.toFixed(0)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 text-xs" style={{ display: visibleColumns['Meth'] ? '' : 'none' }}>AIR</td>
 
                 {/* Cores - Editable Dropdown */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20" style={{ display: visibleColumns['Cores'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.numberOfCores} type="select" editable={true} onChange={(val) => handleCellChange(idx, 'numberOfCores', val)} options={getCoreOptions()} width="w-14" />
                   ) : (
@@ -799,7 +884,7 @@ const ResultsTab = () => {
                 </td>
 
                 {/* Cable Size - Editable Dropdown */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/40">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/40" style={{ display: visibleColumns['Sz2'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.cableSize_sqmm} type="select" editable={true} onChange={(val) => handleCellChange(idx, 'cableSize', val)} options={getCableSizes().map(s => ({label: String(s), value: String(s)}))} width="w-16" />
                   ) : (
@@ -807,12 +892,12 @@ const ResultsTab = () => {
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs">{r.cableCurrentRating_A.toFixed(1)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs">{r.cableResistance_90C_Ohm_Ph_km.toFixed(4)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs">{r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['I'] ? '' : 'none' }}>{r.cableCurrentRating_A.toFixed(1)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['R'] ? '' : 'none' }}>{r.cableResistance_90C_Ohm_Ph_km.toFixed(4)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['X'] ? '' : 'none' }}>{r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4)}</td>
 
                 {/* Cable Length - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20" style={{ display: visibleColumns['L'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.cableLength_m} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'length', val)} precision={1} width="w-14" />
                   ) : (
@@ -820,11 +905,11 @@ const ResultsTab = () => {
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs">{r.k_total_deratingFactor.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/40 text-cyan-300 font-bold text-xs">{r.derated_currentCarryingCapacity_A.toFixed(1)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['K_t'] ? '' : 'none' }}>{r.k_total_deratingFactor.toFixed(3)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/40 text-cyan-300 font-bold text-xs" style={{ display: visibleColumns['I_d'] ? '' : 'none' }}>{r.derated_currentCarryingCapacity_A.toFixed(1)}</td>
 
                 {/* Number of Runs - Editable Numerical */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20">
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20" style={{ display: visibleColumns['Runs'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.numberOfRuns} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'numberOfRuns', val)} precision={0} width="w-12" />
                   ) : (
@@ -832,22 +917,22 @@ const ResultsTab = () => {
                   )}
                 </td>
 
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.capacityCheck === 'YES' ? 'text-green-300 bg-green-950/40' : 'text-red-300 bg-red-950/40'}`}>{r.capacityCheck}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs">{r.k1_ambientTemp.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs">{r.k2_groupingFactor.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs">{r.k3_groundTemp.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs">{r.k5_thermalResistivity.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs">{r.k4_depthOfLaying.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-red-950/20 text-slate-200 font-mono text-xs">{r.runningVoltageDrop_V.toFixed(2)}</td>
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.runningVoltageDrop_percent <= 3 ? 'text-green-300 bg-green-950/40' : 'text-red-300 bg-red-950/40'}`}>{r.runningVoltageDrop_percent.toFixed(2)}</td>
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.runningVoltageDropCheck === 'YES' ? 'text-green-300' : 'text-red-300'}`}>{r.runningVoltageDropCheck}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-yellow-950/20 text-slate-200 font-mono text-xs">{r.startingVoltageDip_V.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-yellow-950/20 text-slate-200 font-mono text-xs">{r.startingVoltageDropCheck === 'NA' ? 'NA' : r.startingVoltageDip_percent.toFixed(2)}</td>
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.startingVoltageDropCheck === 'YES' ? 'text-green-300' : r.startingVoltageDropCheck === 'NA' ? 'text-slate-400' : 'text-red-300'}`}>{r.startingVoltageDropCheck}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-300 truncate text-xs max-w-xs">{r.cableDesignation}</td>
+                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.capacityCheck === 'YES' ? 'text-green-300 bg-green-950/40' : 'text-red-300 bg-red-950/40'}`} style={{ display: visibleColumns['OK'] ? '' : 'none' }}>{r.capacityCheck}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K1'] ? '' : 'none' }}>{r.k1_ambientTemp.toFixed(3)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K2'] ? '' : 'none' }}>{r.k2_groupingFactor.toFixed(3)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K3'] ? '' : 'none' }}>{r.k3_groundTemp.toFixed(3)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K5'] ? '' : 'none' }}>{r.k5_thermalResistivity.toFixed(3)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K4'] ? '' : 'none' }}>{r.k4_depthOfLaying.toFixed(3)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-red-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['ΔU'] ? '' : 'none' }}>{r.runningVoltageDrop_V.toFixed(2)}</td>
+                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.runningVoltageDrop_percent <= 3 ? 'text-green-300 bg-green-950/40' : 'text-red-300 bg-red-950/40'}`} style={{ display: visibleColumns['%ΔU'] ? '' : 'none' }}>{r.runningVoltageDrop_percent.toFixed(2)}</td>
+                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.runningVoltageDropCheck === 'YES' ? 'text-green-300' : 'text-red-300'}`} style={{ display: visibleColumns['OK2'] ? '' : 'none' }}>{r.runningVoltageDropCheck}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-yellow-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['ΔU2'] ? '' : 'none' }}>{r.startingVoltageDip_V.toFixed(2)}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-center bg-yellow-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['%ΔU2'] ? '' : 'none' }}>{r.startingVoltageDropCheck === 'NA' ? 'NA' : r.startingVoltageDip_percent.toFixed(2)}</td>
+                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.startingVoltageDropCheck === 'YES' ? 'text-green-300' : r.startingVoltageDropCheck === 'NA' ? 'text-slate-400' : 'text-red-300'}`} style={{ display: visibleColumns['OK3'] ? '' : 'none' }}>{r.startingVoltageDropCheck}</td>
+                <td className="border border-slate-600 px-1 py-0.5 text-slate-300 truncate text-xs max-w-xs" style={{ display: visibleColumns['Description'] ? '' : 'none' }}>{r.cableDesignation}</td>
 
                 {/* Remarks - Editable Text */}
-                <td className="border border-slate-600 px-1 py-0.5">
+                <td className="border border-slate-600 px-1 py-0.5" style={{ display: visibleColumns['Rem'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.remarks} type="text" editable={true} onChange={(val) => handleCellChange(idx, 'remarks', val)} width="w-full" />
                   ) : (
@@ -859,7 +944,7 @@ const ResultsTab = () => {
                   r.status === 'APPROVED' ? 'bg-green-600/30 text-green-300' :
                   r.status === 'WARNING' ? 'bg-yellow-600/30 text-yellow-300' :
                   'bg-red-600/30 text-red-300'
-                }`}>
+                }`} style={{ display: visibleColumns['Status'] ? '' : 'none' }}>
                   {r.status === 'APPROVED' ? '✓' : r.status === 'WARNING' ? '⚠' : '✗'} {r.status}
                 </td>
               </tr>
