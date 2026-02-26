@@ -840,7 +840,7 @@ const ResultsTab = () => {
 
         {/* Formula Viewer Box */}
         {selectedCell && results[selectedCell.rowIdx] && (
-          <div className="bg-slate-700/70 border border-cyan-500 rounded px-3 py-2 flex-1 max-w-md">
+          <div className="bg-slate-700/80 border border-cyan-500 rounded px-4 py-3 flex-1 max-w-3xl min-w-[560px] max-h-72 overflow-auto">
             {(() => {
               const formulaData = buildFormulaBreakdown(selectedCell.rowIdx, selectedCell.fieldKey);
               if (!formulaData) {
@@ -852,7 +852,7 @@ const ResultsTab = () => {
                 );
               }
               return (
-                <div className="text-xs space-y-1 max-h-32 overflow-auto">
+                <div className="text-sm space-y-2 max-h-64 overflow-auto text-slate-200">
                   <p className="font-semibold text-cyan-300">{formulaData.label}</p>
                   <p className="text-yellow-300 bg-slate-800/50 p-1 rounded font-mono text-xs">{formulaData.formula}</p>
                   {formulaData.values && formulaData.values.length > 0 && (

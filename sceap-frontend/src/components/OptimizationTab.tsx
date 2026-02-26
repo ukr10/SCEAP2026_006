@@ -6,6 +6,7 @@ const OptimizationTab = () => {
   const { pathAnalysis } = usePathContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [expandedCable, setExpandedCable] = useState<{ pathId: string; idx: number } | null>(null);
 
   // Use real paths from analysis
   const paths = pathAnalysis?.paths || [];
@@ -126,32 +127,61 @@ const OptimizationTab = () => {
                 {/* Complete cable chain with all intermediate stops */}
                 {path.cables && path.cables.length > 0 ? (
                   <>
-                    {path.cables.map((cable, idx) => (
-                      <div key={idx} className="flex items-center gap-1">
-                        {/* Arrow */}
-                        <div className="flex flex-col items-center justify-center px-2">
-                          <ArrowRight className="text-cyan-400 flex-shrink-0" size={18} />
-                          <span className="text-cyan-300 text-xs font-bold mt-1 whitespace-nowrap">
-                            {cable.parallelCount && cable.parallelCount > 1
-                              ? `${cable.originalCables?.join(', ')} (${cable.parallelCount} runs)`
-                              : cable.cableNumber}
-                          </span>
-                          <span className="text-slate-400 text-xs">({cable.length.toFixed(1)}m)</span>
+                    {path.cables.map((cable, idx) => {
+                      const detail = path.voltageDropDetails?.[idx];
+                      const isExpanded = expandedCable && expandedCable.pathId === path.pathId && expandedCable.idx === idx;
+                      return (
+                        <div key={idx} className="flex items-start gap-3 w-full">
+                          {/* Arrow + Bus card */}
+                          <div className="flex items-center gap-1 flex-1">
+                            <div className="flex flex-col items-center justify-center px-2">
+                              <ArrowRight className="text-cyan-400 flex-shrink-0" size={18} />
+                              <span className="text-cyan-300 text-xs font-bold mt-1 whitespace-nowrap">
+                                {cable.parallelCount && cable.parallelCount > 1
+                                  ? `${cable.originalCables?.join(', ')} (${cable.parallelCount} runs)`
+                                  : cable.cableNumber}
+                              </span>
+                              <span className="text-slate-400 text-xs">({cable.length.toFixed(1)}m)</span>
+                            </div>
+
+                            <div onClick={() => setExpandedCable(isExpanded ? null : { pathId: path.pathId, idx })} className={`px-3 py-2 rounded-lg text-white min-w-max border-2 font-semibold shadow-lg cursor-pointer ${
+                              idx === path.cables.length - 1 
+                                ? 'bg-purple-900/60 border-purple-400' 
+                                : 'bg-blue-900/60 border-blue-400'
+                            }`}>
+                              <div className="text-sm">{cable.toBus}</div>
+                              {cable.feederDescription && (
+                                <div className="text-slate-200 text-xs mt-0.5">{cable.feederDescription}</div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Adjacent white calculation box (shows to the right of the cable card) */}
+                          <div className={`transition-all duration-200 ${isExpanded ? 'opacity-100' : 'opacity-60'} min-w-[320px] max-w-md`}> 
+                            {detail ? (
+                              <div className="bg-white/7 border border-white/20 rounded p-3 text-sm text-slate-200">
+                                <div className="flex justify-between items-center">
+                                  <div className="font-semibold text-cyan-200">Step {idx + 1}: {cable.cableNumber}</div>
+                                  <div className="text-xs text-slate-400">#{cable.serialNo}</div>
+                                </div>
+                                <div className="mt-2 text-xs grid grid-cols-2 gap-2 text-slate-300">
+                                  <div>Size: <span className="text-green-300 font-bold">{detail.size} mm²</span></div>
+                                  <div>R (90°C): <span className="text-green-300">{detail.resistance.toFixed(4)} Ω/km</span></div>
+                                  <div>Running I: <span className="text-green-300">{detail.current.toFixed(2)} A</span></div>
+                                  <div>Derated I: <span className="text-green-300">{detail.deratedCurrent.toFixed(2)} A</span></div>
+                                  <div>Length: <span className="text-green-300">{cable.length} m</span></div>
+                                  <div>Runs: <span className="text-green-300">{detail.numberOfRuns ?? 1}</span></div>
+                                </div>
+                                <div className="mt-2 border-t border-white/10 pt-2 text-xs text-yellow-300 font-mono">{detail.formula}</div>
+                                <div className="mt-2 border-t border-white/10 pt-2 text-sm text-green-300 font-semibold">Individual Drop: {detail.drop.toFixed(3)} V <span className="text-slate-400 text-xs ml-2">(Limit 5%)</span></div>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-slate-400 italic">No calculation available</div>
+                            )}
+                          </div>
                         </div>
-                        
-                        {/* Intermediate Bus/Panel */}
-                        <div className={`px-3 py-2 rounded-lg text-white min-w-max border-2 font-semibold shadow-lg ${
-                          idx === path.cables.length - 1 
-                            ? 'bg-purple-900/60 border-purple-400' 
-                            : 'bg-blue-900/60 border-blue-400'
-                        }`}>
-                          <div className="text-sm">{cable.toBus}</div>
-                          {cable.feederDescription && (
-                            <div className="text-slate-200 text-xs mt-0.5">{cable.feederDescription}</div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     
                     {/* Transformer endpoint */}
                     <div className="flex items-center gap-1">

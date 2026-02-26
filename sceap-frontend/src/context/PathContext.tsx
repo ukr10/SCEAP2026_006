@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
-import { PathAnalysisResult, CableSegment } from '../utils/pathDiscoveryService';
+import { PathAnalysisResult, CableSegment, analyzeAllPaths } from '../utils/pathDiscoveryService';
 
 interface PathContextType {
   pathAnalysis: PathAnalysisResult | null;
@@ -40,13 +40,21 @@ export const PathProvider = ({ children }: { children: ReactNode }) => {
     setSelectedPaths(new Set());
   };
 
-  // Update a single feeder's fields
+  // Update a single feeder's fields and recompute path analysis
   const updateFeeder = (cableNumber: string, updates: Partial<CableSegment>) => {
     if (!normalizedFeeders) return;
     const updated = normalizedFeeders.map((f) =>
       f.cableNumber === cableNumber ? { ...f, ...updates } : f
     );
     setNormalizedFeeders(updated);
+
+    try {
+      // Re-run path discovery/voltage-drop analysis using the updated feeders and existing catalogue
+      const analysis = analyzeAllPaths(updated, catalogueData);
+      setPathAnalysis(analysis);
+    } catch (err) {
+      console.error('Failed to recompute path analysis after feeder update', err);
+    }
   };
 
   // Revert to original uploaded feeders
