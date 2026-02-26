@@ -1018,20 +1018,16 @@ const ResultsTab = () => {
               <tr
                 key={idx}
                 onClick={() => setHighlightedRow(highlightedRow === idx ? null : idx)}
-                className={`${idx % 2 === 0 ? 'bg-slate-800' : 'bg-slate-750'} hover:bg-slate-700/60 transition ${
-                  r.status === 'FAILED' ? 'border-l-4 border-red-600' :
-                  r.status === 'WARNING' ? 'border-l-4 border-yellow-600' :
-                  'border-l-4 border-green-600'
-                } ${highlightedRow === idx ? 'ring-2 ring-cyan-500' : ''}`}
+                className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition border-b border-gray-300 ${highlightedRow === idx ? 'ring-2 ring-blue-400 bg-blue-100' : ''}`}
               >
-                <td className="border border-slate-600 px-1 py-0.5 text-center text-slate-200 font-semibold text-xs" style={{ display: visibleColumns['SL'] ? '' : 'none' }}>{r.slNo}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['Cable #'] ? '' : 'none' }}>{r.cableNumber}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['From'] ? '' : 'none' }}>{r.fromBus}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['To'] ? '' : 'none' }}>{r.toBus}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-200 text-xs truncate max-w-xs" style={{ display: visibleColumns['Desc'] ? '' : 'none' }}>{r.description}</td>
+                <td className="border-r border-gray-300 px-2 py-1 text-center text-slate-900 font-semibold text-xs" style={{ display: visibleColumns['SL'] ? '' : 'none' }}>{r.slNo}</td>
+                <td className="border-r border-gray-300 px-2 py-1 text-slate-900 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['Cable #'] ? '' : 'none' }}>{r.cableNumber}</td>
+                <td className="border-r border-gray-300 px-2 py-1 text-slate-900 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['From'] ? '' : 'none' }}>{r.fromBus}</td>
+                <td className="border-r border-gray-300 px-2 py-1 text-slate-900 text-xs font-mono whitespace-nowrap" style={{ display: visibleColumns['To'] ? '' : 'none' }}>{r.toBus}</td>
+                <td className="border-r border-gray-300 px-2 py-1 text-slate-900 text-xs truncate max-w-xs" style={{ display: visibleColumns['Desc'] ? '' : 'none' }}>{r.description}</td>
                 
                 {/* Type - Editable Dropdown M/F */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['Type'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-2 py-1 text-center text-slate-900" style={{ display: visibleColumns['Type'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell
                       value={r.feederType}
@@ -1042,12 +1038,12 @@ const ResultsTab = () => {
                       width="w-20"
                     />
                   ) : (
-                    <span className="text-slate-200 font-bold text-xs">{r.feederType}</span>
+                    <span className="text-slate-900 font-bold text-xs">{r.feederType}</span>
                   )}
                 </td>
 
                 {/* Power - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['kW'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-2 py-1 text-center text-slate-900" style={{ display: visibleColumns['kW'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.ratedPowerKW} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'loadKW', val)} precision={2} width="w-16" />
                   ) : (
@@ -1055,114 +1051,114 @@ const ResultsTab = () => {
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['kV'] ? '' : 'none' }}>{r.ratedVoltageKV.toFixed(2)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['kV'] ? '' : 'none' }}>{r.ratedVoltageKV.toFixed(2)}</td>
 
                 {/* PowerFactor - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['PF'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900" style={{ display: visibleColumns['PF'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.powerFactor} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'powerFactor', val)} precision={2} width="w-14" />
                   ) : (
-                    <span className="text-slate-200 font-mono text-xs">{r.powerFactor.toFixed(2)}</span>
+                    <span className="text-slate-900 font-mono text-xs">{r.powerFactor.toFixed(2)}</span>
                   )}
                 </td>
 
                 {/* Efficiency - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['η'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900" style={{ display: visibleColumns['η'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={(r.efficiency * 100).toFixed(0)} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'efficiency', Number(val) / 100)} precision={0} width="w-14" />
                   ) : (
-                    <span className="text-slate-200 font-mono text-xs">{(r.efficiency * 100).toFixed(0)}</span>
+                    <span className="text-slate-900 font-mono text-xs">{(r.efficiency * 100).toFixed(0)}</span>
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/40 text-cyan-300 font-bold text-xs cursor-pointer hover:ring-2 hover:ring-cyan-400" onClick={() => handleCellClick(idx, 'flc_A', 'FLC')} style={{ display: visibleColumns['FLC'] ? '' : 'none' }}>{r.flc_A.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-cyan-400" onClick={() => handleCellClick(idx, 'motorStartingCurrent_A', 'Starting Current')} style={{ display: visibleColumns['I_m'] ? '' : 'none' }}>{r.motorStartingCurrent_A.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['PF_m'] ? '' : 'none' }}>{r.motorStartingPF.toFixed(2)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-blue-50 text-slate-900 font-bold text-xs cursor-pointer hover:ring-2 hover:ring-blue-400" onClick={() => handleCellClick(idx, 'flc_A', 'FLC')} style={{ display: visibleColumns['FLC'] ? '' : 'none' }}>{r.flc_A.toFixed(2)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-blue-400" onClick={() => handleCellClick(idx, 'motorStartingCurrent_A', 'Starting Current')} style={{ display: visibleColumns['I_m'] ? '' : 'none' }}>{r.motorStartingCurrent_A.toFixed(2)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['PF_m'] ? '' : 'none' }}>{r.motorStartingPF.toFixed(2)}</td>
 
                 {/* Installation - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-cyan-950/20" style={{ display: visibleColumns['Inst'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900" style={{ display: visibleColumns['Inst'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.installation} type="select" editable={true} onChange={(val) => handleCellChange(idx, 'installationMethod', val)} options={[{label: 'AIR', value: 'AIR'}, {label: 'TRENCH', value: 'TRENCH'}, {label: 'DUCT', value: 'DUCT'}]} width="w-16" />
                   ) : (
-                    <span className="text-slate-200 text-xs font-mono">{r.installation}</span>
+                    <span className="text-slate-900 text-xs font-mono">{r.installation}</span>
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['Isc'] ? '' : 'none' }}>{r.scCurrentSwitchboard_kA.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['t'] ? '' : 'none' }}>{r.scCurrentWithstandDuration_Sec.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-orange-400" onClick={() => handleCellClick(idx, 'minSizeShortCircuit_sqmm', 'Min Size (SC)')} style={{ display: visibleColumns['Sz'] ? '' : 'none' }}>{r.minSizeShortCircuit_sqmm.toFixed(0)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-orange-950/20 text-slate-200 text-xs" style={{ display: visibleColumns['Meth'] ? '' : 'none' }}>AIR</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['Isc'] ? '' : 'none' }}>{r.scCurrentSwitchboard_kA.toFixed(2)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['t'] ? '' : 'none' }}>{r.scCurrentWithstandDuration_Sec.toFixed(2)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-blue-50 text-slate-900 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-blue-400" onClick={() => handleCellClick(idx, 'minSizeShortCircuit_sqmm', 'Min Size (SC)')} style={{ display: visibleColumns['Sz'] ? '' : 'none' }}>{r.minSizeShortCircuit_sqmm.toFixed(0)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 text-xs" style={{ display: visibleColumns['Meth'] ? '' : 'none' }}>AIR</td>
 
                 {/* Cores - Editable Dropdown */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20" style={{ display: visibleColumns['Cores'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900" style={{ display: visibleColumns['Cores'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.numberOfCores} type="select" editable={true} onChange={(val) => handleCellChange(idx, 'numberOfCores', val)} options={getCoreOptions()} width="w-14" />
                   ) : (
-                    <span className="text-slate-200 font-mono text-xs">{r.numberOfCores}</span>
+                    <span className="text-slate-900 font-mono text-xs">{r.numberOfCores}</span>
                   )}
                 </td>
 
                 {/* Cable Size - Editable Dropdown */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/40" style={{ display: visibleColumns['Sz2'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-blue-50 text-slate-900 font-bold" style={{ display: visibleColumns['Sz2'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.cableSize_sqmm} type="select" editable={true} onChange={(val) => handleCellChange(idx, 'cableSize', val)} options={getCableSizes().map(s => ({label: String(s), value: String(s)}))} width="w-16" />
                   ) : (
-                    <span className="text-yellow-300 font-bold text-xs">{r.cableSize_sqmm}</span>
+                    <span className="text-slate-900 font-bold text-xs">{r.cableSize_sqmm}</span>
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['I'] ? '' : 'none' }}>{r.cableCurrentRating_A.toFixed(1)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['R'] ? '' : 'none' }}>{r.cableResistance_90C_Ohm_Ph_km.toFixed(4)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['X'] ? '' : 'none' }}>{r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['I'] ? '' : 'none' }}>{r.cableCurrentRating_A.toFixed(1)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['R'] ? '' : 'none' }}>{r.cableResistance_90C_Ohm_Ph_km.toFixed(4)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['X'] ? '' : 'none' }}>{r.cableReactance_50Hz_Ohm_Ph_km.toFixed(4)}</td>
 
                 {/* Cable Length - Editable */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-purple-950/20" style={{ display: visibleColumns['L'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900" style={{ display: visibleColumns['L'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.cableLength_m} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'length', val)} precision={1} width="w-14" />
                   ) : (
-                    <span className="text-slate-200 font-mono text-xs">{r.cableLength_m.toFixed(1)}</span>
+                    <span className="text-slate-900 font-mono text-xs">{r.cableLength_m.toFixed(1)}</span>
                   )}
                 </td>
 
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['K_t'] ? '' : 'none' }}>{r.k_total_deratingFactor.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/40 text-cyan-300 font-bold text-xs" style={{ display: visibleColumns['I_d'] ? '' : 'none' }}>{r.derated_currentCarryingCapacity_A.toFixed(1)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['K_t'] ? '' : 'none' }}>{r.k_total_deratingFactor.toFixed(3)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-blue-50 text-slate-900 font-bold text-xs" style={{ display: visibleColumns['I_d'] ? '' : 'none' }}>{r.derated_currentCarryingCapacity_A.toFixed(1)}</td>
 
                 {/* Number of Runs - Editable Numerical */}
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 cursor-pointer hover:ring-2 hover:ring-green-400" style={{ display: visibleColumns['Runs'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'numberOfRuns', 'Parallel Runs')}>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 cursor-pointer hover:ring-2 hover:ring-blue-400" style={{ display: visibleColumns['Runs'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'numberOfRuns', 'Parallel Runs')}>
                   {globalEditMode ? (
                     <EditableCell value={r.numberOfRuns} type="number" editable={true} onChange={(val) => handleCellChange(idx, 'numberOfRuns', val)} precision={0} width="w-12" />
                   ) : (
-                    <span className="text-slate-200 font-mono text-xs">{r.numberOfRuns}</span>
+                    <span className="text-slate-900 font-mono text-xs">{r.numberOfRuns}</span>
                   )}
                 </td>
 
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.capacityCheck === 'YES' ? 'text-green-300 bg-green-950/40' : 'text-red-300 bg-red-950/40'}`} style={{ display: visibleColumns['OK'] ? '' : 'none' }}>{r.capacityCheck}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K1'] ? '' : 'none' }}>{r.k1_ambientTemp.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K2'] ? '' : 'none' }}>{r.k2_groupingFactor.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K3'] ? '' : 'none' }}>{r.k3_groundTemp.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K5'] ? '' : 'none' }}>{r.k5_thermalResistivity.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-green-950/20 text-slate-200 font-mono text-xs text-xs" style={{ display: visibleColumns['K4'] ? '' : 'none' }}>{r.k4_depthOfLaying.toFixed(3)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-red-950/20 text-slate-200 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-red-400" style={{ display: visibleColumns['ΔU'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'runningVoltageDrop_V', 'Running Voltage Drop')}>{r.runningVoltageDrop_V.toFixed(2)}</td>
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs cursor-pointer hover:ring-2 ${r.runningVoltageDrop_percent <= 3 ? 'text-green-300 bg-green-950/40 hover:ring-green-400' : 'text-red-300 bg-red-950/40 hover:ring-red-400'}`} style={{ display: visibleColumns['%ΔU'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'runningVoltageDrop_percent', 'Running V-drop %')}>{r.runningVoltageDrop_percent.toFixed(2)}</td>
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.runningVoltageDropCheck === 'YES' ? 'text-green-300' : 'text-red-300'}`} style={{ display: visibleColumns['OK2'] ? '' : 'none' }}>{r.runningVoltageDropCheck}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-yellow-950/20 text-slate-200 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-yellow-400" style={{ display: visibleColumns['ΔU2'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'startingVoltageDip_V', 'Starting V-dip')}>{r.startingVoltageDip_V.toFixed(2)}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-center bg-yellow-950/20 text-slate-200 font-mono text-xs" style={{ display: visibleColumns['%ΔU2'] ? '' : 'none' }}>{r.startingVoltageDropCheck === 'NA' ? 'NA' : r.startingVoltageDip_percent.toFixed(2)}</td>
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${r.startingVoltageDropCheck === 'YES' ? 'text-green-300' : r.startingVoltageDropCheck === 'NA' ? 'text-slate-400' : 'text-red-300'}`} style={{ display: visibleColumns['OK3'] ? '' : 'none' }}>{r.startingVoltageDropCheck}</td>
-                <td className="border border-slate-600 px-1 py-0.5 text-slate-300 truncate text-xs max-w-xs" style={{ display: visibleColumns['Description'] ? '' : 'none' }}>{r.cableDesignation}</td>
+                <td className={`border-r border-gray-300 px-1 py-0.5 text-center font-bold text-xs ${r.capacityCheck === 'YES' ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`} style={{ display: visibleColumns['OK'] ? '' : 'none' }}>{r.capacityCheck}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs text-xs" style={{ display: visibleColumns['K1'] ? '' : 'none' }}>{r.k1_ambientTemp.toFixed(3)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs text-xs" style={{ display: visibleColumns['K2'] ? '' : 'none' }}>{r.k2_groupingFactor.toFixed(3)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs text-xs" style={{ display: visibleColumns['K3'] ? '' : 'none' }}>{r.k3_groundTemp.toFixed(3)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs text-xs" style={{ display: visibleColumns['K5'] ? '' : 'none' }}>{r.k5_thermalResistivity.toFixed(3)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs text-xs" style={{ display: visibleColumns['K4'] ? '' : 'none' }}>{r.k4_depthOfLaying.toFixed(3)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-blue-400" style={{ display: visibleColumns['ΔU'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'runningVoltageDrop_V', 'Running Voltage Drop')}>{r.runningVoltageDrop_V.toFixed(2)}</td>
+                <td className={`border-r border-gray-300 px-1 py-0.5 text-center font-bold text-xs cursor-pointer hover:ring-2 ${r.runningVoltageDrop_percent <= 3 ? 'text-green-700 bg-green-50 hover:ring-green-400' : 'text-red-700 bg-red-50 hover:ring-red-400'}`} style={{ display: visibleColumns['%ΔU'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'runningVoltageDrop_percent', 'Running V-drop %')}>{r.runningVoltageDrop_percent.toFixed(2)}</td>
+                <td className={`border-r border-gray-300 px-1 py-0.5 text-center font-bold text-xs ${r.runningVoltageDropCheck === 'YES' ? 'text-green-700' : 'text-red-700'}`} style={{ display: visibleColumns['OK2'] ? '' : 'none' }}>{r.runningVoltageDropCheck}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs cursor-pointer hover:ring-2 hover:ring-blue-400" style={{ display: visibleColumns['ΔU2'] ? '' : 'none' }} onClick={() => handleCellClick(idx, 'startingVoltageDip_V', 'Starting V-dip')}>{r.startingVoltageDip_V.toFixed(2)}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-center bg-white text-slate-900 font-mono text-xs" style={{ display: visibleColumns['%ΔU2'] ? '' : 'none' }}>{r.startingVoltageDropCheck === 'NA' ? 'NA' : r.startingVoltageDip_percent.toFixed(2)}</td>
+                <td className={`border-r border-gray-300 px-1 py-0.5 text-center font-bold text-xs ${r.startingVoltageDropCheck === 'YES' ? 'text-green-700' : r.startingVoltageDropCheck === 'NA' ? 'text-slate-500' : 'text-red-700'}`} style={{ display: visibleColumns['OK3'] ? '' : 'none' }}>{r.startingVoltageDropCheck}</td>
+                <td className="border-r border-gray-300 px-1 py-0.5 text-slate-900 truncate text-xs max-w-xs" style={{ display: visibleColumns['Description'] ? '' : 'none' }}>{r.cableDesignation}</td>
 
                 {/* Remarks - Editable Text */}
-                <td className="border border-slate-600 px-1 py-0.5" style={{ display: visibleColumns['Rem'] ? '' : 'none' }}>
+                <td className="border-r border-gray-300 px-1 py-0.5" style={{ display: visibleColumns['Rem'] ? '' : 'none' }}>
                   {globalEditMode ? (
                     <EditableCell value={r.remarks} type="text" editable={true} onChange={(val) => handleCellChange(idx, 'remarks', val)} width="w-full" />
                   ) : (
-                    <span className="text-slate-200 text-xs truncate">{r.remarks}</span>
+                    <span className="text-slate-900 text-xs truncate">{r.remarks}</span>
                   )}
                 </td>
 
-                <td className={`border border-slate-600 px-1 py-0.5 text-center font-bold text-xs ${
-                  r.status === 'APPROVED' ? 'bg-green-600/30 text-green-300' :
-                  r.status === 'WARNING' ? 'bg-yellow-600/30 text-yellow-300' :
-                  'bg-red-600/30 text-red-300'
+                <td className={`border-r border-gray-300 px-1 py-0.5 text-center font-bold text-xs ${
+                  r.status === 'APPROVED' ? 'bg-green-50 text-green-700' :
+                  r.status === 'WARNING' ? 'bg-yellow-50 text-yellow-700' :
+                  'bg-red-50 text-red-700'
                 }`} style={{ display: visibleColumns['Status'] ? '' : 'none' }}>
                   {r.status === 'APPROVED' ? '✓' : r.status === 'WARNING' ? '⚠' : '✗'} {r.status}
                 </td>

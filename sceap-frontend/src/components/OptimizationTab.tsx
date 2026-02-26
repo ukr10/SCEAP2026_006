@@ -218,63 +218,69 @@ const OptimizationTab = () => {
               </p>
             </div>
 
-            {/* Expanded Cable Details with calculation boxes */}
+            {/* Expanded Cable Details with calculation boxes BESIDE */}
             {selectedPath === path.pathId && (
               <div className="mt-4 pt-4 border-t border-slate-700">
                 <h5 className="text-white font-medium mb-3">Cable Voltage Drop Calculations</h5>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {path.cables.map((cable, idx) => {
                     const detail = path.voltageDropDetails?.[idx];
                     return (
-                      <div key={idx} className="bg-slate-700/50 rounded p-4 text-sm border-l-4 border-cyan-500 space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <span className="text-white font-bold text-base">Step {idx + 1}: </span>
-                            <span className="text-cyan-300 font-medium">{cable.cableNumber}</span>
+                      <div key={idx} className="bg-slate-700/50 rounded p-4 text-sm border-l-4 border-cyan-500 flex gap-4">
+                        {/* LEFT: Cable Details */}
+                        <div className="flex-1 space-y-2">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <span className="text-white font-bold text-base">Step {idx + 1}: </span>
+                              <span className="text-cyan-300 font-medium">{cable.cableNumber}</span>
+                            </div>
+                            <span className="text-slate-400 text-xs">#{cable.serialNo}</span>
                           </div>
-                          <span className="text-slate-400 text-xs">#{cable.serialNo}</span>
+                          {cable.feederDescription && (
+                            <p className="text-yellow-300 text-xs italic">📋 {cable.feederDescription}</p>
+                          )}
+                          <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                            <p>From: <span className="text-cyan-300 font-medium">{cable.fromBus}</span></p>
+                            <p>To: <span className="text-cyan-300 font-medium">{cable.toBus}</span></p>
+                            <p>Length: <span className="text-green-300">{cable.length}m</span></p>
+                            <p>Load: <span className="text-green-300">{cable.loadKW}kW</span></p>
+                            <p>Voltage: <span className="text-green-300">{cable.voltage}V</span></p>
+                            <p>PF: <span className="text-green-300">{(cable.powerFactor || 0.85).toFixed(2)}</span></p>
+                          </div>
                         </div>
-                        {cable.feederDescription && (
-                          <p className="text-yellow-300 text-xs italic">📋 {cable.feederDescription}</p>
-                        )}
-                        <div className="grid grid-cols-2 gap-2 text-xs text-slate-300 py-2">
-                          <p>From: <span className="text-cyan-300 font-medium">{cable.fromBus}</span></p>
-                          <p>To: <span className="text-cyan-300 font-medium">{cable.toBus}</span></p>
-                          <p>Length: <span className="text-green-300">{cable.length}m</span></p>
-                          <p>Load: <span className="text-green-300">{cable.loadKW}kW</span></p>
-                          <p>Voltage: <span className="text-green-300">{cable.voltage}V</span></p>
-                          <p>PF: <span className="text-green-300">{(cable.powerFactor || 0.85).toFixed(2)}</span></p>
-                        </div>
-                        {/* White calculation box */}
-                        {detail && (
-                          <div className="bg-white/10 border border-white/20 rounded p-3 mt-2 space-y-1">
-                            <div className="text-cyan-200 font-semibold mb-2">Voltage Drop Calculation</div>
+
+                        {/* RIGHT: Calculation Box */}
+                        {detail ? (
+                          <div className="flex-1 bg-white/10 border border-white/20 rounded p-3 space-y-2">
+                            <div className="text-cyan-200 font-semibold text-sm">Voltage Drop Calculation</div>
                             <div className="text-slate-200 text-xs space-y-1">
-                              <div><strong>Cable Size:</strong> {detail.size}mm²</div>
-                              <div><strong>Resistance (90°C):</strong> {detail.resistance.toFixed(3)}Ω/km</div>
-                              <div><strong>Current (Running):</strong> {detail.current.toFixed(2)}A</div>
-                              <div><strong>Derated Current:</strong> {detail.deratedCurrent.toFixed(2)}A</div>
-                              <div><strong>Length:</strong> {cable.length}m</div>
-                              <div className="pt-1 border-t border-white/20 mt-1">
-                                <div className="italic text-yellow-300">{detail.formula}</div>
+                              <div><strong>Cable Size:</strong> <span className="text-green-300">{detail.size}mm²</span></div>
+                              <div><strong>Resistance (90°C):</strong> <span className="text-green-300">{detail.resistance.toFixed(4)}Ω/km</span></div>
+                              <div><strong>Current (Running):</strong> <span className="text-green-300">{detail.current.toFixed(2)}A</span></div>
+                              <div><strong>Derated Current:</strong> <span className="text-green-300">{detail.deratedCurrent.toFixed(2)}A</span></div>
+                              <div><strong>Length:</strong> <span className="text-green-300">{cable.length}m</span></div>
+                              <div className="pt-2 border-t border-white/20 mt-2">
+                                <div className="italic text-yellow-300 text-xs font-mono break-words">{detail.formula}</div>
                               </div>
-                              <div className="pt-1 border-t border-white/20 mt-1">
-                                <strong className="text-green-300">Individual Drop: {detail.drop.toFixed(3)}V</strong>
+                              <div className="pt-2 border-t border-white/20 mt-2">
+                                <div className="text-green-300 font-semibold text-sm">Drop: {detail.drop.toFixed(3)}V</div>
                               </div>
                               {(detail.numberOfRuns ?? 1) > 1 && (
-                                <div className="text-orange-300 text-xs pt-1">
-                                  <strong>Parallel Runs:</strong> {detail.numberOfRuns} × {detail.sizePerRun}mm² (since {detail.size}mm² exceeds single cable limit)
+                                <div className="text-orange-300 text-xs pt-2 border-t border-white/20 mt-2">
+                                  <strong>Runs:</strong> {detail.numberOfRuns} × {detail.sizePerRun}mm²
                                 </div>
                               )}
                             </div>
                           </div>
+                        ) : (
+                          <div className="flex-1 text-xs text-slate-400 italic">Calculating...</div>
                         )}
                       </div>
                     );
                   })}
-                  <div className="bg-slate-700/70 rounded p-3 mt-2 border border-cyan-400/40">
+                  <div className="bg-slate-700/70 rounded p-3 border border-cyan-400/40">
                     <div className="text-white font-semibold">Path Total</div>
-                    <div className="text-cyan-300 text-sm mt-1">Total Voltage Drop = Sum of all cable drops = <strong>{path.voltageDrop.toFixed(3)}V ({path.voltageDropPercent.toFixed(2)}%)</strong></div>
+                    <div className="text-cyan-300 text-sm mt-1">Total V-drop = <strong>{path.voltageDrop.toFixed(3)}V ({path.voltageDropPercent.toFixed(2)}%)</strong></div>
                   </div>
                 </div>
               </div>
